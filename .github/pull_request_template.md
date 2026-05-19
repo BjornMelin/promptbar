@@ -51,7 +51,8 @@ Breaking changes:
 - [ ] None
 - [ ] Yes
 
-If breaking, describe the change, affected users/systems, and required migration steps:
+If breaking, describe the change, affected users/systems, and required
+migration steps:
 
 - N/A
 
