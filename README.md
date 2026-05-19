@@ -45,19 +45,7 @@ Vercel local dev:
 bun run dev:vercel
 ```
 
-## Release Workflow
-
-Promptbar uses Release Please on merges to `main`.
-
-- Normal feature and fix PRs should use Conventional Commit titles.
-- `.github/workflows/release-please.yml` opens or updates the release PR using
-  `RELEASE_PLEASE_TOKEN`.
-- The release PR updates `package.json`, `.release-please-manifest.json`, and
-  `CHANGELOG.md`.
-- Merging the release PR creates the GitHub Release and a plain `vX.Y.Z` tag,
-  such as `v0.1.1` or `v0.2.0`.
-- While Promptbar remains below `1.0.0`, `fix:` and `feat:` commits produce
-  patch releases, while `!` or `BREAKING CHANGE:` produces a minor release.
+Contributor release policy lives in [docs/release-policy.md](docs/release-policy.md).
 
 ## AI Configuration
 

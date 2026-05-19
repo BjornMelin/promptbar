@@ -98,20 +98,11 @@ agent contract for the repo; do not add tool-specific mirror files such as
 
 ## Pull Request And Release Versioning
 
-- Pull request titles and squash merge commits should use Conventional Commits:
-  `<type>(<optional-scope>): <concise imperative summary>`.
-- Use common types such as `feat`, `fix`, `refactor`, `perf`, `docs`, `test`,
-  `build`, `ci`, `chore`, and `revert`.
-- Promptbar is on a pre-1.0 SemVer track managed by Release Please:
-  `fix:` bumps patch, `feat:` bumps patch, and `!` or `BREAKING CHANGE:`
-  bumps minor.
-- Mark breaking changes honestly with `!` or a `BREAKING CHANGE:` footer. Do
-  not use `release-as` unless the user explicitly asks for a one-off override.
-- Release Please owns `package.json` version updates,
-  `.release-please-manifest.json`, `CHANGELOG.md`, GitHub Releases, and
-  `vX.Y.Z` tags after merges to `main`.
-- Do not rewrite Release Please generated release-note headings in release PR
-  bodies or changelog entries; keep the generated version heading parseable.
+- Follow the canonical contributor release policy in
+  `docs/release-policy.md`.
+- Pull request titles and squash merge commits should use Conventional Commits.
+- Keep `README.md` user-focused; contributor release and review policy belongs
+  in `docs/` and `.github/pull_request_template.md`.
 
 ## Documentation Rules
 
