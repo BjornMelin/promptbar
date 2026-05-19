@@ -96,6 +96,23 @@ agent contract for the repo; do not add tool-specific mirror files such as
   `127.0.0.1:3000` base URL and the built-in web server from
   `playwright.config.ts`.
 
+## Pull Request And Release Versioning
+
+- Pull request titles and squash merge commits should use Conventional Commits:
+  `<type>(<optional-scope>): <concise imperative summary>`.
+- Use common types such as `feat`, `fix`, `refactor`, `perf`, `docs`, `test`,
+  `build`, `ci`, `chore`, and `revert`.
+- Promptbar is on a pre-1.0 SemVer track managed by Release Please:
+  `fix:` bumps patch, `feat:` bumps patch, and `!` or `BREAKING CHANGE:`
+  bumps minor.
+- Mark breaking changes honestly with `!` or a `BREAKING CHANGE:` footer. Do
+  not use `release-as` unless the user explicitly asks for a one-off override.
+- Release Please owns `package.json` version updates,
+  `.release-please-manifest.json`, `CHANGELOG.md`, GitHub Releases, and
+  `vX.Y.Z` tags after merges to `main`.
+- Do not rewrite Release Please generated release-note headings in release PR
+  bodies or changelog entries; keep the generated version heading parseable.
+
 ## Documentation Rules
 
 - Keep `README.md` focused on user setup, runtime model, commands, and data
