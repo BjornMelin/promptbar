@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Promptbar
 
-## Getting Started
+Promptbar is a local-first prompt workbench for importing, normalizing,
+searching, editing, evaluating, and exporting prompt corpora.
 
-First, run the development server:
+## Runtime Model
+
+- Next.js App Router runs locally with Node runtime route handlers.
+- Prompt data is imported into `.promptbar/corpus/`, which is gitignored.
+- SQLite state lives at `.promptbar/promptbar.sqlite`.
+- AI features only read `PROMPTBAR_OPENAI_API_KEY` from this repo's local
+  environment. Global `OPENAI_API_KEY` is intentionally ignored.
+- Without a repo-scoped key, Promptbar remains usable with local FTS search,
+  editing, exports, local eval fallback, and explicit Codex bridge status.
+
+## Commands
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
+bun run db:import /home/bjorn/prompt_library
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://127.0.0.1:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Verification:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+bun run test:e2e
+```
 
-## Learn More
+Turbo orchestration:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+bunx turbo run lint typecheck test build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Vercel local dev:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+bun run dev:vercel
+```
 
-## Deploy on Vercel
+## AI Configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Create `.env.local` from `.env.example`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+PROMPTBAR_OPENAI_API_KEY=sk-proj-...
+PROMPTBAR_OPENAI_MODEL=gpt-5.4
+PROMPTBAR_EMBEDDING_MODEL=text-embedding-3-small
+PROMPTBAR_DEFAULT_IMPORT_ROOT=/home/bjorn/prompt_library
+```
+
+Promptbar does not auto-read `OPENAI_API_KEY`; this avoids accidental spend
+from global shell configuration.
+
+## Data Boundaries
+
+The app treats imported prompts as managed local working data. Exports are
+written to `.promptbar/exports/` and can be reviewed before moving content back
+to an upstream prompt repository.
