@@ -5,6 +5,14 @@ editing, evaluating, and exporting prompt corpora. This file is the canonical
 agent contract for the repo; do not add tool-specific mirror files such as
 `CLAUDE.md`.
 
+## Documentation Context
+
+- `docs/project-overview.md`: docs map and source ownership.
+- `docs/development-guide.md`: commands, verification, layout, contributor flow.
+- `docs/data-boundaries.md`: local state, imports, exports, artifacts, secrets.
+- `docs/release-policy.md`: releases, Conventional Commits, SemVer, changelog,
+  tags.
+
 ## Next.js 16 Contract
 
 - This is Next.js 16.2.6 with App Router, React 19, React Compiler, and
