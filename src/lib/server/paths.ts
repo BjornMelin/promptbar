@@ -9,6 +9,7 @@ export const databasePath = path.join(stateDir, "promptbar.sqlite");
 
 export function defaultImportRoot(): string {
   return (
-    process.env.PROMPTBAR_DEFAULT_IMPORT_ROOT ?? "/home/bjorn/prompt_library"
+    process.env.PROMPTBAR_DEFAULT_IMPORT_ROOT ??
+    path.join(process.env.HOME ?? appRoot, "prompt_library")
   );
 }
