@@ -9,6 +9,9 @@ updates, changelog entries, GitHub Releases, and Git tags.
   `main` and on manual dispatch.
 - `release-please-config.json` owns Release Please package strategy, changelog
   sections, pre-1.0 version mapping, and tag formatting.
+- `bootstrap-sha` in `release-please-config.json` pins the seeded `0.1.0`
+  baseline to the commit that was current on `main` before release automation
+  was added.
 - `.release-please-manifest.json` records the last released version for the root
   package.
 - `package.json` stores the package version Release Please updates.
