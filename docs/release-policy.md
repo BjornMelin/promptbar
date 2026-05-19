@@ -34,7 +34,11 @@ updates, changelog entries, GitHub Releases, and Git tags.
 
 The workflow uses `secrets.RELEASE_PLEASE_TOKEN` so release PRs and release
 events are authored by the configured maintainer credential instead of the
-default GitHub Actions bot token.
+default `GITHUB_TOKEN`. This token must be a personal access token or GitHub App
+token, not only for authorship but also because events and pull requests created
+with `GITHUB_TOKEN` do not trigger subsequent workflow runs or CI. Keep Release
+Please authenticated with `secrets.RELEASE_PLEASE_TOKEN` so generated release
+PRs and release events can start the repository's normal CI and automation.
 
 The workflow declares the Release Please write permissions it needs:
 

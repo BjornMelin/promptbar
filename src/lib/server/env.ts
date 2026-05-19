@@ -10,7 +10,7 @@ export function apiEnabled(): boolean {
 }
 
 export function openAiModel(): string {
-  return process.env.PROMPTBAR_OPENAI_MODEL?.trim() || "gpt-5.4";
+  return process.env.PROMPTBAR_OPENAI_MODEL?.trim() || "gpt-5.5";
 }
 
 export function embeddingModel(): string {
