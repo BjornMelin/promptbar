@@ -1174,4 +1174,28 @@ mod tests {
         assert!(exported.contains("[REDACTED_OPENAI_KEY]"));
         assert!(!exported.contains("sk-proj-abcdefghijklmnopqrstuvwxyz"));
     }
+
+    #[test]
+    fn import_missing_root_returns_empty_report() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing = temp.path().join("missing-corpus");
+        let paths = StatePaths {
+            state_root: temp.path().join("state"),
+            config_root: temp.path().join("config"),
+            cache_root: temp.path().join("cache"),
+            db_path: temp.path().join("state/promptops.sqlite"),
+            raw_dir: temp.path().join("state/raw"),
+            audit_log: temp.path().join("state/audit.jsonl"),
+            config_file: temp.path().join("config/config.toml"),
+        };
+        let store = Store::open(paths).expect("store");
+
+        let report = ingest::import_corpus(&store, &missing).expect("import");
+
+        assert_eq!(report.root, missing.display().to_string());
+        assert_eq!(report.imported, 0);
+        assert_eq!(report.skipped, 0);
+        assert_eq!(report.raw_records, 0);
+        assert_eq!(report.files, 0);
+    }
 }

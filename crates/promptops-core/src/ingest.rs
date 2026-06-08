@@ -21,8 +21,22 @@ const ROOT_LANES: &[&str] = &[
 ];
 
 pub fn import_corpus(store: &Store, root: &Path) -> Result<ImportReport> {
-    let root = root.canonicalize().at_path(root)?;
     let at = now_iso();
+    if !root.exists() {
+        let report = ImportReport {
+            root: root.display().to_string(),
+            imported: 0,
+            skipped: 0,
+            raw_records: 0,
+            files: 0,
+            at,
+        };
+        store.record_import(&report)?;
+        store.append_audit("import_corpus", serde_json::to_value(&report)?)?;
+        return Ok(report);
+    }
+
+    let root = root.canonicalize().at_path(root)?;
     let files = discover_files(&root)?;
     let mut imported = 0;
     let mut skipped = 0;
