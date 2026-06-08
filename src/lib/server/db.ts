@@ -1,10 +1,12 @@
+import { existsSync } from "node:fs";
+
 import Database from "better-sqlite3";
 
 import "server-only";
 
 import { apiEnabled, codexAvailable } from "@/lib/server/env";
 import { databasePath, defaultImportRoot } from "@/lib/server/paths";
-import { runPromptopsJson } from "@/lib/server/promptops";
+import { ensurePromptopsReady, runPromptopsJson } from "@/lib/server/promptops";
 import type {
   CorpusStats,
   EvalRun,
@@ -21,6 +23,22 @@ type Row = Record<string, unknown>;
 
 let singleton: Database.Database | null = null;
 
+/**
+ * Ensures the promptops SQLite database and migrations exist before direct reads.
+ *
+ * @returns A promise that resolves after promptops has initialized local state.
+ */
+export async function ensurePromptopsStateReady(): Promise<void> {
+  if (!existsSync(databasePath)) {
+    await ensurePromptopsReady();
+  }
+}
+
+/**
+ * Opens the singleton promptops SQLite database connection.
+ *
+ * @returns The configured better-sqlite3 database handle.
+ */
 export function db(): Database.Database {
   if (singleton) {
     return singleton;
@@ -31,6 +49,11 @@ export function db(): Database.Database {
   return singleton;
 }
 
+/**
+ * Reads aggregate promptops corpus and runtime statistics.
+ *
+ * @returns Counts, storage metadata, and local runtime capability flags.
+ */
 export function stats(): CorpusStats {
   const conn = db();
   const one = (sql: string): number =>
@@ -67,6 +90,11 @@ export function documentCount(): number {
   ).count;
 }
 
+/**
+ * Reads facet counts for prompt kind, status, tags, and risk flags.
+ *
+ * @returns Facet values grouped by filter category.
+ */
 export function facets(): Facets {
   return {
     kinds: facet("kind"),
@@ -104,6 +132,12 @@ function jsonFacet(column: string) {
     .map(([value, count]) => ({ value, count }));
 }
 
+/**
+ * Searches prompt documents with local SQLite FTS and metadata filters.
+ *
+ * @param input - Search query, filters, mode, and result limit.
+ * @returns Matching prompt summaries ordered by relevance or update time.
+ */
 export function searchDocuments(input: {
   query: string;
   mode: SearchMode;
@@ -146,12 +180,25 @@ export function searchDocuments(input: {
     .all(...args, input.limit) as Row[]).map(summaryFromRow);
 }
 
+/**
+ * Lists recent prompt documents for default corpus views.
+ *
+ * @param limit - Maximum number of prompt summaries to return.
+ * @returns Recent prompt summaries ordered by update time.
+ */
 export function allSearchableDocuments(limit = 80): PromptSummary[] {
   return (db()
     .prepare("SELECT *, 0.0 AS score FROM documents ORDER BY updated_at DESC LIMIT ?")
     .all(limit) as Row[]).map(summaryFromRow);
 }
 
+/**
+ * Loads a full prompt document by id.
+ *
+ * @param id - Prompt document id.
+ * @param options - Controls whether raw, unredacted content is included.
+ * @returns The prompt detail, or null when no prompt exists for the id.
+ */
 export function getPrompt(
   id: string,
   options: { includeRaw?: boolean } = {},
@@ -174,12 +221,25 @@ export function getPrompt(
   };
 }
 
+/**
+ * Loads raw prompt details for evaluation inputs.
+ *
+ * @param ids - Prompt document ids to load.
+ * @returns Prompt details for ids that still exist.
+ */
 export function getPromptContent(ids: string[]): PromptDetail[] {
   return ids
     .map((id) => getPrompt(id, { includeRaw: true }))
     .filter((item): item is PromptDetail => !!item);
 }
 
+/**
+ * Applies a prompt overlay patch through promptops.
+ *
+ * @param id - Prompt document id to patch.
+ * @param patch - Overlay fields and optional edit reason.
+ * @returns The refreshed prompt detail, or null when the prompt no longer exists.
+ */
 export async function patchPrompt(
   id: string,
   patch: {
@@ -258,6 +318,12 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
   );
 }
 
+/**
+ * Persists an evaluation run through promptops.
+ *
+ * @param run - Evaluation run payload to store.
+ * @returns A promise that resolves after the run has been saved.
+ */
 export async function saveEvalRun(run: EvalRun): Promise<void> {
   await runPromptopsJson(
     [
@@ -277,6 +343,12 @@ export async function saveEvalRun(run: EvalRun): Promise<void> {
   resetDb();
 }
 
+/**
+ * Reads recent evaluation runs from promptops state.
+ *
+ * @param limit - Maximum number of runs to return.
+ * @returns Recent evaluation run payloads.
+ */
 export function recentEvalRuns(limit = 10): EvalRun[] {
   const rows = db()
     .prepare(

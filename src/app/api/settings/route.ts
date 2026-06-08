@@ -6,7 +6,11 @@ import {
   embeddingModel,
   openAiModel,
 } from "@/lib/server/env";
-import { databasePath, promptopsStateDir } from "@/lib/server/paths";
+import {
+  databasePath,
+  defaultImportRoot,
+  promptopsStateDir,
+} from "@/lib/server/paths";
 import type { AppSettings } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
@@ -23,7 +27,7 @@ export async function GET() {
     model: openAiModel(),
     embeddingModel: embeddingModel(),
     dbPath: databasePath,
-    corpusDir: promptopsStateDir,
+    corpusDir: defaultImportRoot(),
     promptopsStateDir,
     codexAvailable: codexAvailable(),
   };

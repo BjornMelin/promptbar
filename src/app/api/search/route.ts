@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
 
-import { facets, searchDocuments, stats } from "@/lib/server/db";
+import {
+  ensurePromptopsStateReady,
+  facets,
+  searchDocuments,
+  stats,
+} from "@/lib/server/db";
 import { runPromptopsJson } from "@/lib/server/promptops";
 import { searchRequestSchema } from "@/lib/shared/schemas";
 import type { SearchResponse } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
+/**
+ * Searches prompt documents with lexical or hybrid promptops search.
+ *
+ * @param request - Incoming HTTP request containing search query parameters.
+ * @returns A JSON search response with results, facets, stats, and mode metadata.
+ */
 export async function GET(request: Request) {
+  await ensurePromptopsStateReady();
   const url = new URL(request.url);
   const query = Object.fromEntries(url.searchParams.entries());
   const parsed = searchRequestSchema.parse(query);
