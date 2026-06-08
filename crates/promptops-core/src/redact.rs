@@ -91,13 +91,18 @@ fn has_token_boundary(input: &str, start: usize, end: usize) -> bool {
 fn redact_private_key_blocks(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
     let mut in_key = false;
-    for line in input.lines() {
+    for segment in input.split_inclusive('\n') {
+        let (line, newline) = segment
+            .strip_suffix('\n')
+            .map(|line| (line, "\n"))
+            .unwrap_or((segment, ""));
         let marker = private_key_marker_line(line);
         if marker.is_some_and(|marker| {
             marker.starts_with("-----BEGIN ") && marker.contains("PRIVATE KEY-----")
         }) {
             in_key = true;
-            output.push_str("[REDACTED_PRIVATE_KEY]\n");
+            output.push_str("[REDACTED_PRIVATE_KEY]");
+            output.push_str(newline);
             continue;
         }
         if in_key
@@ -109,8 +114,7 @@ fn redact_private_key_blocks(input: &str) -> String {
             continue;
         }
         if !in_key {
-            output.push_str(line);
-            output.push('\n');
+            output.push_str(segment);
         }
     }
     output
@@ -255,10 +259,18 @@ mod tests {
         );
         assert_eq!(
             redaction.text,
-            "before\n[REDACTED_PRIVATE_KEY]\n[REDACTED_PRIVATE_KEY]\nafter\n"
+            "before\n[REDACTED_PRIVATE_KEY]\n[REDACTED_PRIVATE_KEY]\nafter"
         );
         assert!(!redaction.text.contains("abc123"));
         assert!(!redaction.text.contains("def456"));
         assert!(!redaction.text.contains("PRIVATE KEY-----"));
+    }
+
+    #[test]
+    fn preserves_private_key_trailing_newline_behavior() {
+        let redaction =
+            redact("before\n-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----");
+
+        assert_eq!(redaction.text, "before\n[REDACTED_PRIVATE_KEY]\n");
     }
 }
