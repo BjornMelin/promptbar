@@ -6,11 +6,12 @@ import { promptPatchSchema } from "@/lib/shared/schemas";
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const prompt = getPrompt(id);
+  const includeRaw = new URL(request.url).searchParams.get("raw") === "1";
+  const prompt = getPrompt(id, { includeRaw });
   if (!prompt) {
     return NextResponse.json({ error: "Prompt not found" }, { status: 404 });
   }

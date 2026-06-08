@@ -148,7 +148,10 @@ export function allSearchableDocuments(limit = 80): PromptSummary[] {
     .all(limit) as Row[]).map(summaryFromRow);
 }
 
-export function getPrompt(id: string): PromptDetail | null {
+export function getPrompt(
+  id: string,
+  options: { includeRaw?: boolean } = {},
+): PromptDetail | null {
   const row = db()
     .prepare("SELECT *, 0.0 AS score FROM documents WHERE id = ?")
     .get(id) as Row | undefined;
@@ -159,7 +162,7 @@ export function getPrompt(id: string): PromptDetail | null {
   return {
     ...summary,
     content: String(row.redacted_content ?? row.content ?? ""),
-    rawContent: String(row.content ?? ""),
+    rawContent: options.includeRaw ? String(row.content ?? "") : undefined,
     redactedContent: String(row.redacted_content ?? ""),
     frontmatter: parseObject(row.frontmatter_json),
     versions: listVersions(id),
@@ -168,7 +171,9 @@ export function getPrompt(id: string): PromptDetail | null {
 }
 
 export function getPromptContent(ids: string[]): PromptDetail[] {
-  return ids.map(getPrompt).filter((item): item is PromptDetail => !!item);
+  return ids
+    .map((id) => getPrompt(id, { includeRaw: true }))
+    .filter((item): item is PromptDetail => !!item);
 }
 
 export function patchPrompt(
@@ -205,7 +210,7 @@ export function patchPrompt(
   }
   runPromptopsJson(args, input);
   singleton = null;
-  return getPrompt(id);
+  return getPrompt(id, { includeRaw: patch.content !== undefined });
 }
 
 function listVersions(documentId: string): PromptVersion[] {

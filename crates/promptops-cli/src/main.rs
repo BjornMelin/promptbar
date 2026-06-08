@@ -188,14 +188,6 @@ enum SearchMode {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    if let Some(state_dir) = &cli.state_dir {
-        // SAFETY: This CLI is single-threaded during argument normalization before any
-        // worker tasks are spawned; setting process env here keeps the path override
-        // available to promptops-core without threading it through every command.
-        unsafe {
-            std::env::set_var("PROMPTOPS_STATE_DIR", state_dir);
-        }
-    }
 
     match run(cli).await {
         Ok(()) => Ok(()),
@@ -220,7 +212,7 @@ async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         command => {
-            let paths = StatePaths::resolve()?;
+            let paths = StatePaths::resolve_with_state_dir(cli.state_dir.clone())?;
             let store = Store::open(paths)?;
             match command {
                 Commands::Doctor => emit(cli.json, store.doctor()?),

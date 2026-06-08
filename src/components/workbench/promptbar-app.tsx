@@ -227,6 +227,28 @@ export function PromptbarApp() {
     setBusy(false);
   }
 
+  async function toggleRawVisible() {
+    if (!selected) {
+      return;
+    }
+    if (rawVisible) {
+      setRawVisible(false);
+      setEditorValue(selected.redactedContent ?? selected.content);
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await getJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${selected.id}?raw=1`,
+      );
+      setSelected(data.prompt);
+      setRawVisible(true);
+      setEditorValue(data.prompt.rawContent ?? data.prompt.content);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function toggleFavorite(prompt: PromptSummary) {
     const data = await patchJson<{ prompt: PromptDetail }>(
       `/api/prompts/${prompt.id}`,
@@ -471,18 +493,7 @@ export function PromptbarApp() {
                   busy={busy}
                   rawVisible={rawVisible}
                   onChange={setEditorValue}
-                  onToggleRaw={() => {
-                    if (!selected) return;
-                    setRawVisible((current) => {
-                      const next = !current;
-                      setEditorValue(
-                        next
-                          ? (selected.rawContent ?? selected.content)
-                          : (selected.redactedContent ?? selected.content),
-                      );
-                      return next;
-                    });
-                  }}
+                  onToggleRaw={toggleRawVisible}
                   onSave={saveSelected}
                   onExport={exportSelected}
                 />

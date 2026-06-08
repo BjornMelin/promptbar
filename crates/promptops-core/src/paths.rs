@@ -17,15 +17,21 @@ pub struct StatePaths {
 
 impl StatePaths {
     pub fn resolve() -> Result<Self> {
+        Self::resolve_with_state_dir(None)
+    }
+
+    pub fn resolve_with_state_dir(state_dir: Option<PathBuf>) -> Result<Self> {
         let home = home_dir()?;
-        let state_root = env::var_os("PROMPTOPS_STATE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                env::var_os("XDG_STATE_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| home.join(".local/state"))
-                    .join("promptops")
-            });
+        let state_root = state_dir.unwrap_or_else(|| {
+            env::var_os("PROMPTOPS_STATE_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    env::var_os("XDG_STATE_HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| home.join(".local/state"))
+                        .join("promptops")
+                })
+        });
         let config_root = env::var_os("PROMPTOPS_CONFIG_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {

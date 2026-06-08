@@ -1049,11 +1049,8 @@ fn append_jsonl_private(path: &Path, value: &Value) -> Result<()> {
 fn default_import_root() -> String {
     std::env::var("PROMPTOPS_DEFAULT_IMPORT_ROOT")
         .or_else(|_| std::env::var("PROMPTBAR_DEFAULT_IMPORT_ROOT"))
-        .unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(|home| format!("{home}/prompt_library"))
-                .unwrap_or_else(|_| "/home/bjorn/prompt_library".to_string())
-        })
+        .or_else(|_| std::env::var("HOME").map(|home| format!("{home}/prompt_library")))
+        .unwrap_or_else(|_| "prompt_library".to_string())
 }
 
 #[cfg(test)]

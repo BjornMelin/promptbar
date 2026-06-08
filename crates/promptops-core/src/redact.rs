@@ -12,7 +12,7 @@ pub fn redact(content: &str) -> Redaction {
 
     if contains_openai_key(content) {
         flags.push("openai-key-like".to_string());
-        text = replace_token_like(&text, "sk-", "[REDACTED_OPENAI_KEY]");
+        text = redact_openai_keys(&text);
     }
     if content.contains("-----BEGIN ") && content.contains("PRIVATE KEY-----") {
         flags.push("private-key-marker".to_string());
@@ -46,23 +46,46 @@ pub fn merge_risk_flags(content: &str, existing: &[String]) -> Vec<String> {
 }
 
 fn contains_openai_key(content: &str) -> bool {
-    content
-        .split_whitespace()
-        .any(|token| token.starts_with("sk-") && token.len() >= 24)
+    openai_key_ranges(content).next().is_some()
 }
 
-fn replace_token_like(input: &str, prefix: &str, marker: &str) -> String {
-    input
-        .split_whitespace()
-        .map(|token| {
-            if token.starts_with(prefix) && token.len() >= 24 {
-                marker
-            } else {
-                token
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+fn redact_openai_keys(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut cursor = 0;
+    for (start, end) in openai_key_ranges(input) {
+        output.push_str(&input[cursor..start]);
+        output.push_str("[REDACTED_OPENAI_KEY]");
+        cursor = end;
+    }
+    output.push_str(&input[cursor..]);
+    output
+}
+
+fn openai_key_ranges(input: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
+    input.match_indices("sk-").filter_map(|(start, _)| {
+        let end = input[start..]
+            .char_indices()
+            .take_while(|(_, char)| is_openai_key_char(*char))
+            .map(|(index, char)| start + index + char.len_utf8())
+            .last()
+            .unwrap_or(start);
+        if end - start >= 24 && has_token_boundary(input, start, end) {
+            Some((start, end))
+        } else {
+            None
+        }
+    })
+}
+
+fn is_openai_key_char(char: char) -> bool {
+    char.is_ascii_alphanumeric() || char == '-' || char == '_'
+}
+
+fn has_token_boundary(input: &str, start: usize, end: usize) -> bool {
+    let before = input[..start].chars().next_back();
+    let after = input[end..].chars().next();
+    before.is_none_or(|char| !is_openai_key_char(char))
+        && after.is_none_or(|char| !is_openai_key_char(char))
 }
 
 fn redact_private_key_blocks(input: &str) -> String {
@@ -178,5 +201,29 @@ mod tests {
                 .contains(&"sensitive-keyword".to_string())
         );
         assert!(redaction.text.contains("TITLE=secret prompt"));
+    }
+
+    #[test]
+    fn redacts_quoted_openai_keys_without_reformatting() {
+        let redaction =
+            redact("json: {\"apiKey\":\"sk-proj-abcdefghijklmnopqrstuvwxyz\"}\n  keep  spacing");
+
+        assert!(
+            redaction
+                .risk_flags
+                .contains(&"openai-key-like".to_string())
+        );
+        assert_eq!(
+            redaction.text,
+            "json: {\"apiKey\":\"[REDACTED_OPENAI_KEY]\"}\n  keep  spacing"
+        );
+        assert!(!redaction.text.contains("sk-proj"));
+    }
+
+    #[test]
+    fn preserves_whitespace_when_redacting_openai_keys() {
+        let redaction = redact("before\n  sk-abcdefghijklmnopqrstuvwxyz\n\tafter");
+
+        assert_eq!(redaction.text, "before\n  [REDACTED_OPENAI_KEY]\n\tafter");
     }
 }
