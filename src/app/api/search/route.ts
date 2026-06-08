@@ -8,7 +8,7 @@ import {
 } from "@/lib/server/db";
 import { runPromptopsJson } from "@/lib/server/promptops";
 import { searchRequestSchema } from "@/lib/shared/schemas";
-import type { SearchResponse } from "@/lib/shared/types";
+import type { PromptKind, PromptStatus, SearchResponse } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
@@ -65,8 +65,8 @@ export async function GET(request: Request) {
       results: envelope.data.results.map((item) => ({
         id: item.id,
         title: item.title,
-        kind: item.kind as never,
-        status: item.status as never,
+        kind: item.kind as PromptKind,
+        status: item.status as PromptStatus,
         favorite: item.favorite,
         tags: item.tags,
         riskFlags: item.risk_flags,

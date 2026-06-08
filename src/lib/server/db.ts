@@ -22,6 +22,7 @@ import type {
 type Row = Record<string, unknown>;
 
 let singleton: Database.Database | null = null;
+let ensurePromptopsPromise: Promise<void> | null = null;
 
 /**
  * Ensures the promptops SQLite database and migrations exist before direct reads.
@@ -29,9 +30,13 @@ let singleton: Database.Database | null = null;
  * @returns A promise that resolves after promptops has initialized local state.
  */
 export async function ensurePromptopsStateReady(): Promise<void> {
-  if (!existsSync(databasePath)) {
-    await ensurePromptopsReady();
+  if (existsSync(databasePath)) {
+    return;
   }
+  ensurePromptopsPromise ??= ensurePromptopsReady().finally(() => {
+    ensurePromptopsPromise = null;
+  });
+  await ensurePromptopsPromise;
 }
 
 /**
@@ -210,11 +215,13 @@ export function getPrompt(
     return null;
   }
   const summary = summaryFromRow(row);
+  const rawContent = String(row.content ?? "");
+  const redactedContent = String(row.redacted_content ?? rawContent);
   return {
     ...summary,
-    content: String(row.redacted_content ?? row.content ?? ""),
-    rawContent: options.includeRaw ? String(row.content ?? "") : undefined,
-    redactedContent: String(row.redacted_content ?? ""),
+    content: options.includeRaw ? rawContent : redactedContent,
+    rawContent: options.includeRaw ? rawContent : undefined,
+    redactedContent,
     frontmatter: parseObject(row.frontmatter_json),
     versions: listVersions(id),
     related: relatedPrompts(summary),
