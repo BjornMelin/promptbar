@@ -38,6 +38,8 @@ export type PromptSummary = {
 
 export type PromptDetail = PromptSummary & {
   content: string;
+  rawContent?: string;
+  redactedContent?: string;
   frontmatter: Record<string, unknown>;
   versions: PromptVersion[];
   related: PromptSummary[];
@@ -131,5 +133,6 @@ export type AppSettings = {
   embeddingModel: string;
   dbPath: string;
   corpusDir: string;
+  promptopsStateDir?: string;
   codexAvailable: boolean;
 };

@@ -6,7 +6,7 @@ import {
   embeddingModel,
   openAiModel,
 } from "@/lib/server/env";
-import { corpusDir, databasePath } from "@/lib/server/paths";
+import { databasePath, promptopsStateDir } from "@/lib/server/paths";
 import type { AppSettings } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
@@ -18,7 +18,8 @@ export async function GET() {
     model: openAiModel(),
     embeddingModel: embeddingModel(),
     dbPath: databasePath,
-    corpusDir,
+    corpusDir: promptopsStateDir,
+    promptopsStateDir,
     codexAvailable: codexAvailable(),
   };
   return NextResponse.json(settings);

@@ -108,6 +108,7 @@ export function PromptbarApp() {
   const [selected, setSelected] = useState<PromptDetail | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editorValue, setEditorValue] = useState("");
+  const [rawVisible, setRawVisible] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [evalRuns, setEvalRuns] = useState<EvalRun[]>([]);
   const [evalInput, setEvalInput] = useState("Summarize the intended use.");
@@ -200,7 +201,8 @@ export function PromptbarApp() {
   async function selectPrompt(id: string) {
     const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
     setSelected(data.prompt);
-    setEditorValue(data.prompt.content);
+    setRawVisible(false);
+    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
     setSelectedIds((current) =>
       current.includes(id) ? current : [id, ...current].slice(0, 8),
     );
@@ -210,13 +212,17 @@ export function PromptbarApp() {
     if (!selected) {
       return;
     }
+    if (!rawVisible) {
+      setNotice("Reveal raw content before saving content edits.");
+      return;
+    }
     setBusy(true);
     const data = await patchJson<{ prompt: PromptDetail }>(
       `/api/prompts/${selected.id}`,
       { content: editorValue, reason: "Editor save" },
     );
     setSelected(data.prompt);
-    setEditorValue(data.prompt.content);
+    setEditorValue(data.prompt.rawContent ?? data.prompt.content);
     await refreshSearch();
     setBusy(false);
   }
@@ -463,7 +469,20 @@ export function PromptbarApp() {
                   selected={selected}
                   value={editorValue}
                   busy={busy}
+                  rawVisible={rawVisible}
                   onChange={setEditorValue}
+                  onToggleRaw={() => {
+                    if (!selected) return;
+                    setRawVisible((current) => {
+                      const next = !current;
+                      setEditorValue(
+                        next
+                          ? (selected.rawContent ?? selected.content)
+                          : (selected.redactedContent ?? selected.content),
+                      );
+                      return next;
+                    });
+                  }}
                   onSave={saveSelected}
                   onExport={exportSelected}
                 />
@@ -717,7 +736,9 @@ function EditorView(props: {
   selected: PromptDetail | null;
   value: string;
   busy: boolean;
+  rawVisible: boolean;
   onChange: (value: string) => void;
+  onToggleRaw: () => void;
   onSave: () => Promise<void>;
   onExport: () => Promise<void>;
 }) {
@@ -737,6 +758,14 @@ function EditorView(props: {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              onClick={props.onToggleRaw}
+              className="border-white/10 bg-white/5"
+            >
+              <ShieldCheck className="size-4" />
+              {props.rawVisible ? "Hide raw" : "Reveal raw"}
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => void props.onExport()}
               className="border-white/10 bg-white/5"
             >
@@ -744,7 +773,7 @@ function EditorView(props: {
               Export
             </Button>
             <Button
-              disabled={props.busy}
+              disabled={props.busy || !props.rawVisible}
               onClick={() => void props.onSave()}
               className="bg-[#d1ff3c] text-[#151611]"
             >
@@ -770,6 +799,19 @@ function EditorView(props: {
             <Meta
               label="Hash"
               value={props.selected.contentHash.slice(0, 12)}
+            />
+          </dl>
+        </Panel>
+        <Panel>
+          <PanelHeader icon={ShieldCheck} title="Privacy" />
+          <dl className="space-y-3 text-sm">
+            <Meta
+              label="View"
+              value={props.rawVisible ? "raw local" : "redacted"}
+            />
+            <Meta
+              label="Risk"
+              value={props.selected.riskFlags.join(", ") || "none"}
             />
           </dl>
         </Panel>
@@ -1258,8 +1300,12 @@ function SettingsSheet(props: {
               />
               <Meta label="DB" value={props.settings?.dbPath ?? "pending"} />
               <Meta
-                label="Corpus"
-                value={props.settings?.corpusDir ?? "pending"}
+                label="State"
+                value={
+                  props.settings?.promptopsStateDir ??
+                  props.settings?.corpusDir ??
+                  "pending"
+                }
               />
             </dl>
           </Panel>
