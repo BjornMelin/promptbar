@@ -22,9 +22,16 @@ iteration, and reviewable exports back to the source repository.
 
 ## Runtime Model
 
-- Next.js App Router runs locally with Node runtime route handlers.
-- Prompt data is imported into `.promptbar/corpus/`, which is gitignored.
-- SQLite state lives at `.promptbar/promptbar.sqlite`.
+- `promptops` is the authoritative Rust data engine and CLI. It owns prompt
+  capture, import, SQLite migrations, FTS search, hybrid search, overlays,
+  exports, and Codex hook ingestion.
+- Next.js App Router runs locally with Node runtime route handlers. Promptbar
+  reads the promptops SQLite database directly for fast views and calls
+  `promptops --json` for writes and jobs.
+- SQLite state lives at `~/.local/state/promptops/promptops.sqlite` by default.
+  Set `PROMPTOPS_STATE_DIR` to override it.
+- Promptbar keeps only UI-local artifacts under `.promptbar/`, including
+  reviewed exports.
 - AI features only read `PROMPTBAR_OPENAI_API_KEY` from this repo's local
   environment. Global `OPENAI_API_KEY` is intentionally ignored.
 - Without a repo-scoped key, Promptbar remains usable with local FTS search,
@@ -34,6 +41,8 @@ iteration, and reviewable exports back to the source repository.
 
 ```bash
 bun install
+bun run promptops:install
+bun run promptops:doctor
 bun run db:import /home/bjorn/prompt_library
 bun run dev
 ```
@@ -62,6 +71,15 @@ Vercel local dev:
 bun run dev:vercel
 ```
 
+Promptops CLI checks:
+
+```bash
+promptops doctor
+promptops capture backfill --since-days 30
+promptops search "promptops" --mode hybrid --limit 10
+promptops policy manifest
+```
+
 Contributor release policy lives in [docs/release-policy.md](docs/release-policy.md).
 
 ## AI Configuration
@@ -81,6 +99,6 @@ from global shell configuration.
 
 ## Data Boundaries
 
-The app treats imported prompts as managed local working data. Exports are
-written to `.promptbar/exports/` and can be reviewed before moving content back
-to an upstream prompt repository.
+Raw prompt captures and the live prompt index are private global promptops
+state. Exports are redacted by default and written to `.promptbar/exports/` for
+review before moving content back to an upstream prompt repository.

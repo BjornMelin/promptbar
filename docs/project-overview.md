@@ -1,7 +1,8 @@
 # Project Overview
 
-Promptbar is a local-first Next.js prompt workbench for importing, searching,
-editing, evaluating, and exporting prompt corpora.
+Promptbar is a local-first prompt workbench backed by `promptops`, a Rust
+CLI/data engine for prompt capture, indexing, search, editing overlays, and
+exports.
 
 ## Documentation Map
 
@@ -23,13 +24,16 @@ editing, evaluating, and exporting prompt corpora.
 - `src/app` contains the App Router pages and API route handlers.
 - `src/components/workbench` contains the primary Promptbar workbench UI.
 - `src/components/ui` contains shadcn/Radix-owned UI primitives.
-- `src/lib/server` contains server-only filesystem, SQLite, AI, import, and
-  Codex bridge code.
+- `crates/` contains the promptops Rust core and CLI.
+- `src/lib/server` contains server-only Promptbar adapters for promptops,
+  SQLite reads, AI, and Codex bridge code.
 - `src/lib/shared` contains shared schemas, types, and tests.
 - `tests/e2e` contains Playwright coverage for browser behavior.
 
 ## Runtime Shape
 
-Promptbar runs locally, stores managed runtime state under `.promptbar/`, and
-keeps AI features scoped to `PROMPTBAR_OPENAI_API_KEY` so global OpenAI shell
-configuration is not used accidentally.
+Promptbar runs locally. Promptops stores authoritative private state under
+`$PROMPTOPS_STATE_DIR` or `~/.local/state/promptops/`, while Promptbar keeps
+UI-local artifacts under `.promptbar/`. AI features stay scoped to
+`PROMPTBAR_OPENAI_API_KEY` so global OpenAI shell configuration is not used
+accidentally.
