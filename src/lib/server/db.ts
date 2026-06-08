@@ -55,6 +55,11 @@ export function stats(): CorpusStats {
   };
 }
 
+/**
+ * Counts prompt documents available in the promptops database.
+ *
+ * @returns The total number of stored prompt documents.
+ */
 export function documentCount(): number {
   return (
     db().prepare("SELECT COUNT(*) AS count FROM documents").get() as {

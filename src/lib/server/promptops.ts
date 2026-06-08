@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 
 import "server-only";
 
+import { embeddingModel, repoOpenAiKey } from "@/lib/server/env";
 import { promptopsStateDir } from "@/lib/server/paths";
 
 type PromptopsEnvelope<T> = {
@@ -9,6 +10,11 @@ type PromptopsEnvelope<T> = {
   data: T;
 };
 
+/**
+ * Resolves the promptops executable and base arguments for local CLI calls.
+ *
+ * @returns The command and leading arguments used to invoke promptops.
+ */
 export function promptopsCommand(): { command: string; args: string[] } {
   if (process.env.PROMPTOPS_BIN) {
     return { command: process.env.PROMPTOPS_BIN, args: [] };
@@ -22,6 +28,13 @@ export function promptopsCommand(): { command: string; args: string[] } {
   return { command: "promptops", args: [] };
 }
 
+/**
+ * Runs promptops with `--json` and parses the stable output envelope.
+ *
+ * @param args - Promptops subcommand arguments after the global `--json` flag.
+ * @param input - Optional stdin payload for commands that accept non-argv data.
+ * @returns The parsed promptops JSON envelope.
+ */
 export function runPromptopsJson<T>(
   args: string[],
   input?: string,
@@ -34,11 +47,18 @@ export function runPromptopsJson<T>(
     env: {
       ...process.env,
       PROMPTOPS_STATE_DIR: promptopsStateDir,
+      PROMPTOPS_EMBED_API_KEY:
+        process.env.PROMPTOPS_EMBED_API_KEY ?? repoOpenAiKey() ?? undefined,
+      PROMPTOPS_EMBED_MODEL:
+        process.env.PROMPTOPS_EMBED_MODEL ?? embeddingModel(),
     },
   });
   return JSON.parse(output) as PromptopsEnvelope<T>;
 }
 
+/**
+ * Verifies promptops can initialize and read its local state.
+ */
 export function ensurePromptopsReady(): void {
   runPromptopsJson(["doctor"]);
 }

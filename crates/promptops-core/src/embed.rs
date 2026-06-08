@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Duration;
 
 use crate::db::Store;
 use crate::error::Result;
@@ -28,7 +29,7 @@ pub async fn rebuild_embeddings(
     config: &EmbedConfig,
     limit: usize,
 ) -> Result<EmbedReport> {
-    let chunks = store.chunks_missing_embeddings(&config.model, limit)?;
+    let chunks = store.chunks_missing_embeddings(&config.model, config.dimensions, limit)?;
     if chunks.is_empty() {
         return Ok(EmbedReport {
             model: config.model.clone(),
@@ -36,7 +37,7 @@ pub async fn rebuild_embeddings(
             skipped: 0,
         });
     }
-    let client = reqwest::Client::new();
+    let client = embedding_client()?;
     let url = format!("{}/embeddings", config.base_url.trim_end_matches('/'));
     let values = chunks
         .iter()
@@ -98,7 +99,7 @@ pub async fn hybrid_search(
         .iter()
         .map(|item| item.id.clone())
         .collect::<Vec<_>>();
-    let vectors = store.embedded_chunks_for_documents(&ids, &config.model)?;
+    let vectors = store.embedded_chunks_for_documents(&ids, &config.model, config.dimensions)?;
     if vectors.is_empty() {
         response.hybrid_available = false;
         response.hybrid_reason =
@@ -154,7 +155,7 @@ pub async fn hybrid_search(
 }
 
 async fn request_embeddings(config: &EmbedConfig, values: &[String]) -> Result<Vec<Vec<f32>>> {
-    let client = reqwest::Client::new();
+    let client = embedding_client()?;
     let url = format!("{}/embeddings", config.base_url.trim_end_matches('/'));
     let mut request = client.post(url).json(&EmbeddingRequest {
         model: &config.model,
@@ -173,6 +174,13 @@ async fn request_embeddings(config: &EmbedConfig, values: &[String]) -> Result<V
         .into_iter()
         .map(|datum| datum.embedding)
         .collect())
+}
+
+fn embedding_client() -> Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(30))
+        .build()?)
 }
 
 fn cosine(left: &[f32], right: &[f32]) -> f32 {

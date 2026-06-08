@@ -294,6 +294,10 @@ async fn run(cli: Cli) -> Result<()> {
                         .get_prompt(&id)?
                         .with_context(|| format!("prompt {id} was not found"))?;
                     if cli.json {
+                        let mut prompt = prompt;
+                        if !raw {
+                            prompt.content = prompt.redacted_content.clone();
+                        }
                         emit(true, prompt)
                     } else {
                         println!("# {}", prompt.summary.title);

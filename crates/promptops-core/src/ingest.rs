@@ -223,11 +223,12 @@ fn import_document(store: &Store, seed: DocumentSeed<'_>) -> Result<()> {
     let kind = kind_for_path(seed.relative, seed.source_type);
     let title = title_for_content(seed.content, seed.relative);
     let content_hash = sha256(seed.content);
+    let root_string = seed.root.display().to_string();
     let id = stable_id([
         "doc",
+        &root_string,
         &relative_string,
         seed.source_record_id.as_deref().unwrap_or(""),
-        &content_hash,
     ]);
     let tags = merge_lists(
         merge_lists(tags_for_path(seed.relative), intent_tags(seed.content)),

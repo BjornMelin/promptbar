@@ -64,7 +64,8 @@ pub fn backfill(
         inserted: 0,
         skipped: 0,
     };
-    let files = session_files(since)?;
+    let mut files = session_files(since)?;
+    files.reverse();
     for path in files.into_iter().take(limit_files.unwrap_or(usize::MAX)) {
         stats.files += 1;
         let records = parse_session_file(&path)?;

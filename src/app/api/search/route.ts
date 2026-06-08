@@ -45,8 +45,10 @@ export async function GET(request: Request) {
       hybrid_available: boolean;
       hybrid_reason: string;
     }>(args);
+    const mode =
+      envelope.data.mode.toLowerCase() === "hybrid" ? "hybrid" : "lexical";
     const payload: SearchResponse = {
-      mode: "hybrid",
+      mode,
       query: envelope.data.query,
       results: envelope.data.results.map((item) => ({
         id: item.id,

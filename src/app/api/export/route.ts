@@ -6,6 +6,12 @@ import { exportRequestSchema } from "@/lib/shared/schemas";
 
 export const runtime = "nodejs";
 
+/**
+ * Exports selected prompts to redacted markdown files through promptops.
+ *
+ * @param request - Request with JSON body validated by `exportRequestSchema`.
+ * @returns JSON containing the first file path, all exported files, and count.
+ */
 export async function POST(request: Request) {
   const body = exportRequestSchema.parse(await request.json());
   const envelope = runPromptopsJson<{ files: string[]; exported: number }>([

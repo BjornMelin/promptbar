@@ -513,20 +513,32 @@ impl Store {
     pub fn chunks_missing_embeddings(
         &self,
         model: &str,
+        dimensions: Option<usize>,
         limit: usize,
     ) -> Result<Vec<(String, String)>> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare(
+        let sql = if dimensions.is_some() {
+            r#"
+            SELECT id, content FROM chunks
+            WHERE embedding IS NULL OR embedding_model != ? OR embedding_dim != ?
+            ORDER BY rowid ASC
+            LIMIT ?
+            "#
+        } else {
             r#"
             SELECT id, content FROM chunks
             WHERE embedding IS NULL OR embedding_model != ?
             ORDER BY rowid ASC
             LIMIT ?
-            "#,
-        )?;
-        let rows = stmt.query_map(params![model, limit as i64], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?;
+            "#
+        };
+        let mut stmt = conn.prepare(sql)?;
+        let map_row = |row: &Row<'_>| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?));
+        let rows = if let Some(dimensions) = dimensions {
+            stmt.query_map(params![model, dimensions as i64, limit as i64], map_row)?
+        } else {
+            stmt.query_map(params![model, limit as i64], map_row)?
+        };
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(Into::into)
     }
@@ -547,6 +559,7 @@ impl Store {
         &self,
         document_ids: &[String],
         model: &str,
+        dimensions: Option<usize>,
     ) -> Result<Vec<(String, Vec<f32>)>> {
         if document_ids.is_empty() {
             return Ok(Vec::new());
@@ -556,15 +569,24 @@ impl Store {
             .map(|_| "?")
             .collect::<Vec<_>>()
             .join(",");
-        let sql = format!(
-            "SELECT document_id, embedding FROM chunks WHERE document_id IN ({marks}) AND embedding_model = ? AND embedding IS NOT NULL"
-        );
+        let sql = if dimensions.is_some() {
+            format!(
+                "SELECT document_id, embedding FROM chunks WHERE document_id IN ({marks}) AND embedding_model = ? AND embedding_dim = ? AND embedding IS NOT NULL"
+            )
+        } else {
+            format!(
+                "SELECT document_id, embedding FROM chunks WHERE document_id IN ({marks}) AND embedding_model = ? AND embedding IS NOT NULL"
+            )
+        };
         let mut args: Vec<Box<dyn rusqlite::ToSql>> = document_ids
             .iter()
             .cloned()
             .map(|id| Box::new(id) as Box<dyn rusqlite::ToSql>)
             .collect();
         args.push(Box::new(model.to_string()));
+        if let Some(dimensions) = dimensions {
+            args.push(Box::new(dimensions as i64));
+        }
         let params = rusqlite::params_from_iter(args.iter().map(|arg| arg.as_ref()));
         let conn = self.connect()?;
         let mut stmt = conn.prepare(&sql)?;
@@ -769,23 +791,42 @@ fn apply_migrations(conn: &mut Connection) -> Result<()> {
 }
 
 fn replace_chunks(conn: &Connection, document_id: &str, content: &str) -> Result<()> {
-    conn.execute("DELETE FROM chunks WHERE document_id = ?", [document_id])?;
     let chunks = chunk_content(content);
     let mut stmt = conn.prepare(
         r#"
         INSERT INTO chunks(id, document_id, ordinal, content, content_hash, token_estimate)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(id) DO UPDATE SET
+            ordinal=excluded.ordinal,
+            content=excluded.content,
+            content_hash=excluded.content_hash,
+            token_estimate=excluded.token_estimate
         "#,
     )?;
+    let mut active_ids = Vec::new();
     for (index, chunk) in chunks.iter().enumerate() {
+        let id = stable_id(["chunk", document_id, &index.to_string(), &sha256(chunk)]);
         stmt.execute(params![
-            stable_id(["chunk", document_id, &index.to_string(), &sha256(chunk)]),
+            id,
             document_id,
             index as i64,
             chunk,
             sha256(chunk),
             estimate_tokens(chunk) as i64,
         ])?;
+        active_ids.push(id);
+    }
+    if active_ids.is_empty() {
+        conn.execute("DELETE FROM chunks WHERE document_id = ?", [document_id])?;
+    } else {
+        let marks = active_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!("DELETE FROM chunks WHERE document_id = ? AND id NOT IN ({marks})");
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(active_ids.len() + 1);
+        params.push(&document_id);
+        for id in &active_ids {
+            params.push(id);
+        }
+        conn.execute(&sql, rusqlite::params_from_iter(params))?;
     }
     Ok(())
 }
