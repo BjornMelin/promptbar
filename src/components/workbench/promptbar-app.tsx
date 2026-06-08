@@ -264,11 +264,19 @@ export function PromptbarApp() {
       setEditorValue(selected.redactedContent ?? selected.content);
       return;
     }
+    const promptId = selected.id;
+    const selectionVersion = selectionVersionRef.current;
     setBusy(true);
     try {
       const data = await getJson<{ prompt: PromptDetail }>(
-        `/api/prompts/${selected.id}?raw=1`,
+        `/api/prompts/${promptId}?raw=1`,
       );
+      if (
+        selectedRef.current?.id !== promptId ||
+        selectionVersion !== selectionVersionRef.current
+      ) {
+        return;
+      }
       setSelected(data.prompt);
       setRawVisible(true);
       setEditorValue(data.prompt.rawContent ?? data.prompt.content);

@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-
 import Database from "better-sqlite3";
 
 import "server-only";
@@ -23,6 +21,7 @@ type Row = Record<string, unknown>;
 
 let singleton: Database.Database | null = null;
 let ensurePromptopsPromise: Promise<void> | null = null;
+let promptopsStateReady = false;
 
 /**
  * Ensures the promptops SQLite database and migrations exist before direct reads.
@@ -30,13 +29,14 @@ let ensurePromptopsPromise: Promise<void> | null = null;
  * @returns A promise that resolves after promptops has initialized local state.
  */
 export async function ensurePromptopsStateReady(): Promise<void> {
-  if (existsSync(databasePath)) {
+  if (promptopsStateReady) {
     return;
   }
   ensurePromptopsPromise ??= ensurePromptopsReady().finally(() => {
     ensurePromptopsPromise = null;
   });
   await ensurePromptopsPromise;
+  promptopsStateReady = true;
 }
 
 /**
