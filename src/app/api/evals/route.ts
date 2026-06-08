@@ -31,6 +31,6 @@ export async function POST(request: Request) {
     cases: body.cases,
     results,
   };
-  saveEvalRun(run);
+  await saveEvalRun(run);
   return NextResponse.json({ run });
 }

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -121,6 +121,9 @@ export function PromptbarApp() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const selectedRef = useRef<PromptDetail | null>(null);
+  const editorValueRef = useRef("");
+  const rawVisibleRef = useRef(false);
 
   const chatTransport = useMemo(
     () =>
@@ -131,6 +134,32 @@ export function PromptbarApp() {
     [selectedIds],
   );
   const chat = useChat({ transport: chatTransport });
+
+  useEffect(() => {
+    selectedRef.current = selected;
+    editorValueRef.current = editorValue;
+    rawVisibleRef.current = rawVisible;
+  }, [editorValue, rawVisible, selected]);
+
+  const selectPrompt = useCallback(async (id: string) => {
+    const current = selectedRef.current;
+    if (
+      current &&
+      editorValueRef.current !== currentEditorSource(current, rawVisibleRef.current)
+    ) {
+      const confirmed = window.confirm("Discard unsaved editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
+    setSelected(data.prompt);
+    setRawVisible(false);
+    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
+    setSelectedIds((current) =>
+      current.includes(id) ? current : [id, ...current].slice(0, 8),
+    );
+  }, []);
 
   const refreshSearch = useCallback(async () => {
     const params = new URLSearchParams({
@@ -152,7 +181,7 @@ export function PromptbarApp() {
     if (!selected && data.results[0]) {
       await selectPrompt(data.results[0].id);
     }
-  }, [kind, mode, query, selected, status]);
+  }, [kind, mode, query, selectPrompt, selected, status]);
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -180,7 +209,7 @@ export function PromptbarApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectPrompt]);
 
   useEffect(() => {
     const id = window.setTimeout(() => void bootstrap(), 0);
@@ -198,16 +227,6 @@ export function PromptbarApp() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  async function selectPrompt(id: string) {
-    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
-    setSelected(data.prompt);
-    setRawVisible(false);
-    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
-    setSelectedIds((current) =>
-      current.includes(id) ? current : [id, ...current].slice(0, 8),
-    );
-  }
-
   async function saveSelected() {
     if (!selected) {
       return;
@@ -222,7 +241,7 @@ export function PromptbarApp() {
       { content: editorValue, reason: "Editor save" },
     );
     setSelected(data.prompt);
-    setEditorValue(data.prompt.rawContent ?? data.prompt.content);
+    setEditorValue(data.prompt.rawContent ?? editorValue);
     await refreshSearch();
     setBusy(false);
   }
@@ -638,6 +657,12 @@ function Dashboard({
       </aside>
     </div>
   );
+}
+
+function currentEditorSource(prompt: PromptDetail, rawVisible: boolean): string {
+  return rawVisible
+    ? (prompt.rawContent ?? prompt.content)
+    : (prompt.redactedContent ?? prompt.content);
 }
 
 function SearchView(props: {

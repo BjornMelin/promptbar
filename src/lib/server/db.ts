@@ -4,7 +4,7 @@ import "server-only";
 
 import { apiEnabled, codexAvailable } from "@/lib/server/env";
 import { databasePath, defaultImportRoot } from "@/lib/server/paths";
-import { ensurePromptopsReady, runPromptopsJson } from "@/lib/server/promptops";
+import { runPromptopsJson } from "@/lib/server/promptops";
 import type {
   CorpusStats,
   EvalRun,
@@ -25,7 +25,6 @@ export function db(): Database.Database {
   if (singleton) {
     return singleton;
   }
-  ensurePromptopsReady();
   singleton = new Database(databasePath);
   singleton.pragma("journal_mode = WAL");
   singleton.pragma("foreign_keys = ON");
@@ -181,7 +180,7 @@ export function getPromptContent(ids: string[]): PromptDetail[] {
     .filter((item): item is PromptDetail => !!item);
 }
 
-export function patchPrompt(
+export async function patchPrompt(
   id: string,
   patch: {
     title?: string;
@@ -191,7 +190,7 @@ export function patchPrompt(
     tags?: string[];
     reason?: string;
   },
-): PromptDetail | null {
+): Promise<PromptDetail | null> {
   const args = ["overlay", "patch", id];
   let input: string | undefined;
   if (patch.title) {
@@ -213,8 +212,8 @@ export function patchPrompt(
   if (patch.reason) {
     args.push("--reason", patch.reason);
   }
-  runPromptopsJson(args, input);
-  singleton = null;
+  await runPromptopsJson(args, input);
+  resetDb();
   return getPrompt(id, { includeRaw: patch.content !== undefined });
 }
 
@@ -259,8 +258,8 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
   );
 }
 
-export function saveEvalRun(run: EvalRun): void {
-  runPromptopsJson(
+export async function saveEvalRun(run: EvalRun): Promise<void> {
+  await runPromptopsJson(
     [
       "eval",
       "save",
@@ -275,7 +274,7 @@ export function saveEvalRun(run: EvalRun): void {
     ],
     JSON.stringify(run),
   );
-  singleton = null;
+  resetDb();
 }
 
 export function recentEvalRuns(limit = 10): EvalRun[] {
@@ -336,6 +335,11 @@ function parseObject(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function resetDb(): void {
+  singleton?.close();
+  singleton = null;
 }
 
 function ftsQuery(value: string): string {

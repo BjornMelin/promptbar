@@ -5,6 +5,13 @@ import { promptPatchSchema } from "@/lib/shared/schemas";
 
 export const runtime = "nodejs";
 
+/**
+ * Loads one prompt document for the editor or reveal flow.
+ *
+ * @param request - Incoming HTTP request with optional `raw=1` query flag.
+ * @param context - Route context whose awaited `params.id` is the prompt id.
+ * @returns A JSON response with `{ prompt }`, or a 404 JSON error.
+ */
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -24,7 +31,7 @@ export async function PATCH(
 ) {
   const { id } = await context.params;
   const body = promptPatchSchema.parse(await request.json());
-  const prompt = patchPrompt(id, body);
+  const prompt = await patchPrompt(id, body);
   if (!prompt) {
     return NextResponse.json({ error: "Prompt not found" }, { status: 404 });
   }

@@ -14,7 +14,7 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   const body = exportRequestSchema.parse(await request.json());
-  const envelope = runPromptopsJson<{ files: string[]; exported: number }>([
+  const envelope = await runPromptopsJson<{ files: string[]; exported: number }>([
     "export",
     "--out",
     exportsDir,

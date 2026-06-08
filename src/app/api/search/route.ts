@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     if (parsed.kind) args.push("--kind", parsed.kind);
     if (parsed.status) args.push("--status", parsed.status);
     if (parsed.tag) args.push("--tag", parsed.tag);
-    const envelope = runPromptopsJson<{
+    const envelope = await runPromptopsJson<{
       mode: "Lexical" | "Hybrid" | "lexical" | "hybrid";
       query: string;
       results: Array<{

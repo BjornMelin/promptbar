@@ -13,7 +13,10 @@ type PromptopsImportReport = {
 };
 
 export async function importCorpus(root: string): Promise<ImportReport> {
-  const envelope = runPromptopsJson<PromptopsImportReport>(["import", root]);
+  const envelope = await runPromptopsJson<PromptopsImportReport>([
+    "import",
+    root,
+  ]);
   return {
     root: envelope.data.root,
     imported: envelope.data.imported,

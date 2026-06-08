@@ -21,14 +21,13 @@ impl StatePaths {
     }
 
     pub fn resolve_with_state_dir(state_dir: Option<PathBuf>) -> Result<Self> {
-        let home = home_dir()?;
         let state_root = state_dir.unwrap_or_else(|| {
             env::var_os("PROMPTOPS_STATE_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| {
                     env::var_os("XDG_STATE_HOME")
                         .map(PathBuf::from)
-                        .unwrap_or_else(|| home.join(".local/state"))
+                        .unwrap_or_else(|| home_dir_or_current().join(".local/state"))
                         .join("promptops")
                 })
         });
@@ -37,7 +36,7 @@ impl StatePaths {
             .unwrap_or_else(|| {
                 env::var_os("XDG_CONFIG_HOME")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| home.join(".config"))
+                    .unwrap_or_else(|| home_dir_or_current().join(".config"))
                     .join("promptops")
             });
         let cache_root = env::var_os("PROMPTOPS_CACHE_DIR")
@@ -45,7 +44,7 @@ impl StatePaths {
             .unwrap_or_else(|| {
                 env::var_os("XDG_CACHE_HOME")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| home.join(".cache"))
+                    .unwrap_or_else(|| home_dir_or_current().join(".cache"))
                     .join("promptops")
             });
 
@@ -74,10 +73,11 @@ impl StatePaths {
     }
 }
 
-fn home_dir() -> Result<PathBuf> {
+fn home_dir_or_current() -> PathBuf {
     env::var_os("HOME")
         .map(PathBuf::from)
-        .ok_or_else(|| crate::PromptOpsError::InvalidInput("HOME is not set".to_string()))
+        .or_else(|| env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 #[cfg(unix)]

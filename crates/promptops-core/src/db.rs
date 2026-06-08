@@ -1091,7 +1091,11 @@ fn default_import_root() -> String {
     std::env::var("PROMPTOPS_DEFAULT_IMPORT_ROOT")
         .or_else(|_| std::env::var("PROMPTBAR_DEFAULT_IMPORT_ROOT"))
         .or_else(|_| std::env::var("HOME").map(|home| format!("{home}/prompt_library")))
-        .unwrap_or_else(|_| "prompt_library".to_string())
+        .unwrap_or_else(|_| {
+            std::env::current_dir()
+                .map(|dir| format!("{}/prompt_library", dir.display()))
+                .unwrap_or_default()
+        })
 }
 
 #[cfg(test)]
@@ -1114,7 +1118,7 @@ mod tests {
         fs::create_dir_all(&canon).expect("canon dir");
         fs::write(
             canon.join("capture.md"),
-            "# Capture Prompt\n\nUse this prompt for promptops search with token=secret.",
+            "# Capture Prompt\n\nUse this prompt for promptops search with token=secret and sk-proj-abcdefghijklmnopqrstuvwxyz.",
         )
         .expect("fixture");
 
@@ -1167,6 +1171,7 @@ mod tests {
         assert_eq!(export.exported, 1);
         let exported = fs::read_to_string(&export.files[0]).expect("exported file");
         assert!(exported.contains("sensitive-keyword"));
-        assert!(!exported.contains("sk-proj"));
+        assert!(exported.contains("[REDACTED_OPENAI_KEY]"));
+        assert!(!exported.contains("sk-proj-abcdefghijklmnopqrstuvwxyz"));
     }
 }
