@@ -36,8 +36,13 @@ export type PromptSummary = {
   semanticScore?: number;
 };
 
+/**
+ * Full prompt record for editor, reveal, version, and related-prompt views.
+ */
 export type PromptDetail = PromptSummary & {
   content: string;
+  rawContent?: string;
+  redactedContent?: string;
   frontmatter: Record<string, unknown>;
   versions: PromptVersion[];
   related: PromptSummary[];
@@ -124,6 +129,9 @@ export type EvalResult = {
   durationMs: number;
 };
 
+/**
+ * Runtime settings surfaced to the workbench settings panel.
+ */
 export type AppSettings = {
   apiEnabled: boolean;
   apiKeyEnv: "PROMPTBAR_OPENAI_API_KEY";
@@ -131,5 +139,6 @@ export type AppSettings = {
   embeddingModel: string;
   dbPath: string;
   corpusDir: string;
+  promptopsStateDir?: string;
   codexAvailable: boolean;
 };

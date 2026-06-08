@@ -6,11 +6,20 @@ import {
   embeddingModel,
   openAiModel,
 } from "@/lib/server/env";
-import { corpusDir, databasePath } from "@/lib/server/paths";
+import {
+  databasePath,
+  defaultImportRoot,
+  promptopsStateDir,
+} from "@/lib/server/paths";
 import type { AppSettings } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
+/**
+ * Returns current Promptbar runtime settings.
+ *
+ * @returns JSON `AppSettings` with API, model, storage, and Codex status.
+ */
 export async function GET() {
   const settings: AppSettings = {
     apiEnabled: apiEnabled(),
@@ -18,7 +27,8 @@ export async function GET() {
     model: openAiModel(),
     embeddingModel: embeddingModel(),
     dbPath: databasePath,
-    corpusDir,
+    corpusDir: defaultImportRoot(),
+    promptopsStateDir,
     codexAvailable: codexAvailable(),
   };
   return NextResponse.json(settings);

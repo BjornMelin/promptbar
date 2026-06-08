@@ -1,24 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import Database from "better-sqlite3";
 
-import { apiEnabled, codexAvailable, embeddingModel } from "@/lib/server/env";
-import {
-  corpusDir,
-  databasePath,
-  defaultImportRoot,
-  exportsDir,
-  stateDir,
-  versionsDir,
-} from "@/lib/server/paths";
-import {
-  estimateTokens,
-  excerpt,
-  nowIso,
-  sha256,
-  stableId,
-} from "@/lib/server/crypto";
+import "server-only";
+
+import { apiEnabled, codexAvailable } from "@/lib/server/env";
+import { databasePath, defaultImportRoot } from "@/lib/server/paths";
+import { ensurePromptopsReady, runPromptopsJson } from "@/lib/server/promptops";
 import type {
   CorpusStats,
   EvalRun,
@@ -33,297 +19,46 @@ import type {
 
 type Row = Record<string, unknown>;
 
-type DocumentInput = {
-  id: string;
-  title: string;
-  kind: PromptKind;
-  status?: PromptStatus;
-  favorite?: boolean;
-  tags: string[];
-  riskFlags: string[];
-  sourcePath: string;
-  corpusPath: string;
-  content: string;
-  frontmatter: Record<string, unknown>;
-  importedAt: string;
-};
-
-export type ChunkRow = {
-  id: string;
-  documentId: string;
-  content: string;
-  contentHash: string;
-  embedding: Buffer | null;
-  embeddingModel: string | null;
-  embeddingDim: number | null;
-};
-
 let singleton: Database.Database | null = null;
+let ensurePromptopsPromise: Promise<void> | null = null;
+let promptopsStateReady = false;
 
+/**
+ * Ensures the promptops SQLite database and migrations exist before direct reads.
+ *
+ * @returns A promise that resolves after promptops has initialized local state.
+ */
+export async function ensurePromptopsStateReady(): Promise<void> {
+  if (promptopsStateReady) {
+    return;
+  }
+  ensurePromptopsPromise ??= ensurePromptopsReady().finally(() => {
+    ensurePromptopsPromise = null;
+  });
+  await ensurePromptopsPromise;
+  promptopsStateReady = true;
+}
+
+/**
+ * Opens the singleton promptops SQLite database connection.
+ *
+ * @returns The configured better-sqlite3 database handle.
+ */
 export function db(): Database.Database {
   if (singleton) {
     return singleton;
   }
-  fs.mkdirSync(stateDir, { recursive: true });
-  fs.mkdirSync(corpusDir, { recursive: true });
-  fs.mkdirSync(exportsDir, { recursive: true });
-  fs.mkdirSync(versionsDir, { recursive: true });
-
   singleton = new Database(databasePath);
   singleton.pragma("journal_mode = WAL");
   singleton.pragma("foreign_keys = ON");
-  initialize(singleton);
   return singleton;
 }
 
-function initialize(conn: Database.Database): void {
-  conn.exec(`
-    CREATE TABLE IF NOT EXISTS documents (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'inbox',
-      favorite INTEGER NOT NULL DEFAULT 0,
-      tags_json TEXT NOT NULL DEFAULT '[]',
-      risk_flags_json TEXT NOT NULL DEFAULT '[]',
-      source_path TEXT NOT NULL,
-      corpus_path TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      content TEXT NOT NULL,
-      excerpt TEXT NOT NULL,
-      frontmatter_json TEXT NOT NULL DEFAULT '{}',
-      imported_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS chunks (
-      id TEXT PRIMARY KEY,
-      document_id TEXT NOT NULL,
-      ordinal INTEGER NOT NULL,
-      content TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      token_estimate INTEGER NOT NULL,
-      embedding_model TEXT,
-      embedding_dim INTEGER,
-      embedding BLOB,
-      FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS versions (
-      id TEXT PRIMARY KEY,
-      document_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      content TEXT NOT NULL,
-      reason TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS eval_runs (
-      id TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL,
-      mode TEXT NOT NULL,
-      model TEXT NOT NULL,
-      payload_json TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS imports (
-      id TEXT PRIMARY KEY,
-      root TEXT NOT NULL,
-      imported INTEGER NOT NULL,
-      skipped INTEGER NOT NULL,
-      raw_records INTEGER NOT NULL,
-      files INTEGER NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
-    USING fts5(id UNINDEXED, title, tags, source_path, content);
-
-    CREATE INDEX IF NOT EXISTS idx_documents_kind
-    ON documents(kind);
-    CREATE INDEX IF NOT EXISTS idx_documents_status
-    ON documents(status);
-    CREATE INDEX IF NOT EXISTS idx_documents_hash
-    ON documents(content_hash);
-    CREATE INDEX IF NOT EXISTS idx_chunks_document
-    ON chunks(document_id);
-    CREATE INDEX IF NOT EXISTS idx_chunks_embedding
-    ON chunks(embedding_model, embedding_dim);
-  `);
-}
-
-export function upsertDocument(input: DocumentInput): void {
-  const conn = db();
-  const contentHash = sha256(input.content);
-  const updatedAt = nowIso();
-
-  const existing = conn
-    .prepare("SELECT id FROM documents WHERE id = ?")
-    .get(input.id);
-
-  conn
-    .prepare(
-      `
-      INSERT INTO documents (
-        id, title, kind, status, favorite, tags_json, risk_flags_json,
-        source_path, corpus_path, content_hash, content, excerpt,
-        frontmatter_json, imported_at, updated_at
-      )
-      VALUES (
-        @id, @title, @kind, @status, @favorite, @tagsJson, @riskFlagsJson,
-        @sourcePath, @corpusPath, @contentHash, @content, @excerpt,
-        @frontmatterJson, @importedAt, @updatedAt
-      )
-      ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        kind = excluded.kind,
-        tags_json = excluded.tags_json,
-        risk_flags_json = excluded.risk_flags_json,
-        source_path = excluded.source_path,
-        corpus_path = excluded.corpus_path,
-        content_hash = excluded.content_hash,
-        content = excluded.content,
-        excerpt = excluded.excerpt,
-        frontmatter_json = excluded.frontmatter_json,
-        updated_at = excluded.updated_at
-      `,
-    )
-    .run({
-      id: input.id,
-      title: input.title,
-      kind: input.kind,
-      status: input.status ?? "inbox",
-      favorite: input.favorite ? 1 : 0,
-      tagsJson: JSON.stringify(input.tags),
-      riskFlagsJson: JSON.stringify(input.riskFlags),
-      sourcePath: input.sourcePath,
-      corpusPath: input.corpusPath,
-      contentHash,
-      content: input.content,
-      excerpt: excerpt(input.content),
-      frontmatterJson: JSON.stringify(input.frontmatter),
-      importedAt: input.importedAt,
-      updatedAt,
-    });
-
-  if (!existing) {
-    writeManagedFile(input.corpusPath, input);
-  }
-  replaceChunks(input.id, input.content);
-  refreshFts(input.id);
-}
-
-export function writeManagedFile(
-  corpusPath: string,
-  input: Pick<DocumentInput, "title" | "content" | "frontmatter">,
-): void {
-  fs.mkdirSync(path.dirname(corpusPath), { recursive: true });
-  const frontmatter = JSON.stringify(input.frontmatter, null, 2);
-  const body = `---\n${frontmatter}\n---\n\n${input.content.trim()}\n`;
-  fs.writeFileSync(corpusPath, body, "utf8");
-}
-
-function replaceChunks(documentId: string, content: string): void {
-  const conn = db();
-  conn.prepare("DELETE FROM chunks WHERE document_id = ?").run(documentId);
-  const chunks = chunkContent(content);
-  const insert = conn.prepare(`
-    INSERT INTO chunks (
-      id, document_id, ordinal, content, content_hash, token_estimate
-    )
-    VALUES (@id, @documentId, @ordinal, @content, @hash, @tokens)
-  `);
-  for (const [index, chunk] of chunks.entries()) {
-    insert.run({
-      id: stableId(documentId, String(index), sha256(chunk)),
-      documentId,
-      ordinal: index,
-      content: chunk,
-      hash: sha256(chunk),
-      tokens: estimateTokens(chunk),
-    });
-  }
-}
-
-function chunkContent(content: string): string[] {
-  const paragraphs = content
-    .split(/\n{2,}/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const chunks: string[] = [];
-  let current = "";
-  for (const paragraph of paragraphs) {
-    const next = current ? `${current}\n\n${paragraph}` : paragraph;
-    if (next.length > 1800 && current) {
-      chunks.push(current);
-      current = paragraph;
-    } else {
-      current = next;
-    }
-  }
-  if (current) {
-    chunks.push(current);
-  }
-  return chunks.length ? chunks : [content.trim()].filter(Boolean);
-}
-
-function refreshFts(documentId: string): void {
-  const conn = db();
-  const row = conn
-    .prepare("SELECT * FROM documents WHERE id = ?")
-    .get(documentId) as Row | undefined;
-  if (!row) {
-    return;
-  }
-  conn.prepare("DELETE FROM documents_fts WHERE id = ?").run(documentId);
-  conn
-    .prepare(
-      `
-      INSERT INTO documents_fts(id, title, tags, source_path, content)
-      VALUES (@id, @title, @tags, @sourcePath, @content)
-      `,
-    )
-    .run({
-      id: row.id,
-      title: row.title,
-      tags: parseList(row.tags_json).join(" "),
-      sourcePath: row.source_path,
-      content: row.content,
-    });
-}
-
-export function recordImport(input: {
-  id: string;
-  root: string;
-  imported: number;
-  skipped: number;
-  rawRecords: number;
-  files: number;
-  createdAt: string;
-}): void {
-  db()
-    .prepare(
-      `
-      INSERT INTO imports(
-        id, root, imported, skipped, raw_records, files, created_at
-      )
-      VALUES(
-        @id, @root, @imported, @skipped, @rawRecords, @files, @createdAt
-      )
-      `,
-    )
-    .run(input);
-}
-
-export function documentCount(): number {
-  const row = db().prepare("SELECT COUNT(*) AS count FROM documents").get() as {
-    count: number;
-  };
-  return row.count;
-}
-
+/**
+ * Reads aggregate promptops corpus and runtime statistics.
+ *
+ * @returns Counts, storage metadata, and local runtime capability flags.
+ */
 export function stats(): CorpusStats {
   const conn = db();
   const one = (sql: string): number =>
@@ -335,9 +70,7 @@ export function stats(): CorpusStats {
     documents: one("SELECT COUNT(*) AS count FROM documents"),
     chunks: one("SELECT COUNT(*) AS count FROM chunks"),
     favorites: one("SELECT COUNT(*) AS count FROM documents WHERE favorite=1"),
-    risks: one(
-      "SELECT COUNT(*) AS count FROM documents WHERE risk_flags_json!='[]'",
-    ),
+    risks: one("SELECT COUNT(*) AS count FROM documents WHERE risk_flags_json!='[]'"),
     evalRuns: one("SELECT COUNT(*) AS count FROM eval_runs"),
     embeddedChunks: one(
       "SELECT COUNT(*) AS count FROM chunks WHERE embedding IS NOT NULL",
@@ -349,33 +82,50 @@ export function stats(): CorpusStats {
   };
 }
 
+/**
+ * Counts prompt documents available in the promptops database.
+ *
+ * @returns The total number of stored prompt documents.
+ */
+export function documentCount(): number {
+  return (
+    db().prepare("SELECT COUNT(*) AS count FROM documents").get() as {
+      count: number;
+    }
+  ).count;
+}
+
+/**
+ * Reads facet counts for prompt kind, status, tags, and risk flags.
+ *
+ * @returns Facet values grouped by filter category.
+ */
 export function facets(): Facets {
   return {
-    kinds: facet("kind", "documents"),
-    statuses: facet("status", "documents"),
-    tags: jsonFacet("tags_json", "documents"),
-    risks: jsonFacet("risk_flags_json", "documents"),
+    kinds: facet("kind"),
+    statuses: facet("status"),
+    tags: jsonFacet("tags_json"),
+    risks: jsonFacet("risk_flags_json"),
   };
 }
 
-function facet(column: string, table: string) {
-  const rows = db()
+function facet(column: string) {
+  return db()
     .prepare(
       `
       SELECT ${column} AS value, COUNT(*) AS count
-      FROM ${table}
+      FROM documents
       GROUP BY ${column}
       ORDER BY count DESC, value ASC
       LIMIT 100
       `,
     )
     .all() as { value: string; count: number }[];
-  return rows;
 }
 
-function jsonFacet(column: string, table: string) {
+function jsonFacet(column: string) {
   const counts = new Map<string, number>();
-  const rows = db().prepare(`SELECT ${column} AS value FROM ${table}`).all();
+  const rows = db().prepare(`SELECT ${column} AS value FROM documents`).all();
   for (const row of rows as { value: string }[]) {
     for (const item of parseList(row.value)) {
       counts.set(item, (counts.get(item) ?? 0) + 1);
@@ -387,6 +137,12 @@ function jsonFacet(column: string, table: string) {
     .map(([value, count]) => ({ value, count }));
 }
 
+/**
+ * Searches prompt documents with local SQLite FTS and metadata filters.
+ *
+ * @param input - Search query, filters, mode, and result limit.
+ * @returns Matching prompt summaries ordered by relevance or update time.
+ */
 export function searchDocuments(input: {
   query: string;
   mode: SearchMode;
@@ -411,10 +167,10 @@ export function searchDocuments(input: {
   }
 
   const query = input.query.trim();
-  let sql = "SELECT d.*, 0 AS score FROM documents d";
+  let sql = "SELECT d.*, 0.0 AS score FROM documents d";
   if (query) {
     sql = `
-      SELECT d.*, bm25(documents_fts) * -1 AS score
+      SELECT d.*, bm25(documents_fts) * -1.0 AS score
       FROM documents_fts
       JOIN documents d ON d.id = documents_fts.id
     `;
@@ -423,42 +179,75 @@ export function searchDocuments(input: {
   }
 
   const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
-  const order = query ? "score DESC" : "d.updated_at DESC";
-  const rows = db()
+  const order = query ? "score DESC, d.updated_at DESC" : "d.updated_at DESC";
+  return (db()
     .prepare(`${sql}${whereSql} ORDER BY ${order} LIMIT ?`)
-    .all(...args, input.limit) as Row[];
-  return rows.map(summaryFromRow);
+    .all(...args, input.limit) as Row[]).map(summaryFromRow);
 }
 
+/**
+ * Lists recent prompt documents for default corpus views.
+ *
+ * @param limit - Maximum number of prompt summaries to return.
+ * @returns Recent prompt summaries ordered by update time.
+ */
 export function allSearchableDocuments(limit = 80): PromptSummary[] {
-  const rows = db()
-    .prepare(
-      "SELECT *, 0 AS score FROM documents ORDER BY updated_at DESC LIMIT ?",
-    )
-    .all(limit) as Row[];
-  return rows.map(summaryFromRow);
+  return (db()
+    .prepare("SELECT *, 0.0 AS score FROM documents ORDER BY updated_at DESC LIMIT ?")
+    .all(limit) as Row[]).map(summaryFromRow);
 }
 
-export function getPrompt(id: string): PromptDetail | null {
+/**
+ * Loads a full prompt document by id.
+ *
+ * @param id - Prompt document id.
+ * @param options - Controls whether raw, unredacted content is included.
+ * @returns The prompt detail, or null when no prompt exists for the id.
+ */
+export function getPrompt(
+  id: string,
+  options: { includeRaw?: boolean } = {},
+): PromptDetail | null {
   const row = db()
-    .prepare("SELECT *, 0 AS score FROM documents WHERE id = ?")
+    .prepare("SELECT *, 0.0 AS score FROM documents WHERE id = ?")
     .get(id) as Row | undefined;
   if (!row) {
     return null;
   }
-  const detail = summaryFromRow(row) as PromptDetail;
-  detail.content = String(row.content ?? "");
-  detail.frontmatter = parseObject(row.frontmatter_json);
-  detail.versions = listVersions(id);
-  detail.related = relatedPrompts(detail);
-  return detail;
+  const summary = summaryFromRow(row);
+  const rawContent = String(row.content ?? "");
+  const redactedContent = String(row.redacted_content ?? rawContent);
+  return {
+    ...summary,
+    content: options.includeRaw ? rawContent : redactedContent,
+    rawContent: options.includeRaw ? rawContent : undefined,
+    redactedContent,
+    frontmatter: parseObject(row.frontmatter_json),
+    versions: listVersions(id),
+    related: relatedPrompts(summary),
+  };
 }
 
+/**
+ * Loads raw prompt details for evaluation inputs.
+ *
+ * @param ids - Prompt document ids to load.
+ * @returns Prompt details for ids that still exist.
+ */
 export function getPromptContent(ids: string[]): PromptDetail[] {
-  return ids.map(getPrompt).filter((item): item is PromptDetail => !!item);
+  return ids
+    .map((id) => getPrompt(id, { includeRaw: true }))
+    .filter((item): item is PromptDetail => !!item);
 }
 
-export function patchPrompt(
+/**
+ * Applies a prompt overlay patch through promptops.
+ *
+ * @param id - Prompt document id to patch.
+ * @param patch - Overlay fields and optional edit reason.
+ * @returns The refreshed prompt detail, or null when the prompt no longer exists.
+ */
+export async function patchPrompt(
   id: string,
   patch: {
     title?: string;
@@ -468,87 +257,35 @@ export function patchPrompt(
     tags?: string[];
     reason?: string;
   },
-): PromptDetail | null {
-  const current = getPrompt(id);
-  if (!current) {
-    return null;
+): Promise<PromptDetail | null> {
+  const args = ["overlay", "patch", id];
+  let input: string | undefined;
+  if (patch.title) {
+    args.push("--title", patch.title);
   }
-  const title = patch.title ?? current.title;
-  const content = patch.content ?? current.content;
-  const tags = patch.tags ?? current.tags;
-  const status = patch.status ?? current.status;
-  const favorite = patch.favorite ?? current.favorite;
-  const reason = patch.reason ?? "Promptbar edit";
-  const conn = db();
-  const tx = conn.transaction(() => {
-    if (content !== current.content || title !== current.title) {
-      saveVersion(current, reason);
-    }
-    conn
-      .prepare(
-        `
-        UPDATE documents SET
-          title = @title,
-          content = @content,
-          content_hash = @hash,
-          excerpt = @excerpt,
-          tags_json = @tags,
-          status = @status,
-          favorite = @favorite,
-          updated_at = @updatedAt
-        WHERE id = @id
-        `,
-      )
-      .run({
-        id,
-        title,
-        content,
-        hash: sha256(content),
-        excerpt: excerpt(content),
-        tags: JSON.stringify(tags),
-        status,
-        favorite: favorite ? 1 : 0,
-        updatedAt: nowIso(),
-      });
-    replaceChunks(id, content);
-    refreshFts(id);
-  });
-  tx();
-
-  const updated = getPrompt(id);
-  if (updated) {
-    writeManagedFile(updated.corpusPath, {
-      title: updated.title,
-      content: updated.content,
-      frontmatter: updated.frontmatter,
-    });
+  if (patch.content !== undefined) {
+    args.push("--content-stdin");
+    input = patch.content;
   }
-  return updated;
-}
-
-function saveVersion(current: PromptDetail, reason: string): void {
-  db()
-    .prepare(
-      `
-      INSERT INTO versions(
-        id, document_id, title, content_hash, content, reason, created_at
-      )
-      VALUES(@id, @documentId, @title, @hash, @content, @reason, @createdAt)
-      `,
-    )
-    .run({
-      id: stableId(current.id, current.contentHash, nowIso()),
-      documentId: current.id,
-      title: current.title,
-      hash: current.contentHash,
-      content: current.content,
-      reason,
-      createdAt: nowIso(),
-    });
+  if (patch.status) {
+    args.push("--status", patch.status);
+  }
+  if (patch.favorite !== undefined) {
+    args.push("--favorite", String(patch.favorite));
+  }
+  if (patch.tags) {
+    args.push("--tags", patch.tags.join(","));
+  }
+  if (patch.reason) {
+    args.push("--reason", patch.reason);
+  }
+  await runPromptopsJson(args, input);
+  resetDb();
+  return getPrompt(id, { includeRaw: patch.content !== undefined });
 }
 
 function listVersions(documentId: string): PromptVersion[] {
-  const rows = db()
+  return db()
     .prepare(
       `
       SELECT
@@ -566,7 +303,6 @@ function listVersions(documentId: string): PromptVersion[] {
       `,
     )
     .all(documentId) as PromptVersion[];
-  return rows;
 }
 
 function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
@@ -574,43 +310,52 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
   if (!tags.length) {
     return [];
   }
-  const rows = db()
+  const clauses = tags.map(() => "tags_json LIKE ?").join(" OR ");
+  return (db()
     .prepare(
       `
-      SELECT *, 0 AS score FROM documents
-      WHERE id != ? AND (
-        tags_json LIKE ? OR tags_json LIKE ? OR tags_json LIKE ?
-      )
+      SELECT *, 0.0 AS score FROM documents
+      WHERE id != ? AND (${clauses})
       ORDER BY updated_at DESC
       LIMIT 6
       `,
     )
-    .all(
-      prompt.id,
-      `%"${tags[0] ?? ""}"%`,
-      `%"${tags[1] ?? ""}"%`,
-      `%"${tags[2] ?? ""}"%`,
-    ) as Row[];
-  return rows.map(summaryFromRow);
+    .all(prompt.id, ...tags.map((tag) => `%"${tag}"%`)) as Row[]).map(
+    summaryFromRow,
+  );
 }
 
-export function saveEvalRun(run: EvalRun): void {
-  db()
-    .prepare(
-      `
-      INSERT INTO eval_runs(id, created_at, mode, model, payload_json)
-      VALUES(@id, @createdAt, @mode, @model, @payload)
-      `,
-    )
-    .run({
-      id: run.id,
-      createdAt: run.createdAt,
-      mode: run.mode,
-      model: run.model,
-      payload: JSON.stringify(run),
-    });
+/**
+ * Persists an evaluation run through promptops.
+ *
+ * @param run - Evaluation run payload to store.
+ * @returns A promise that resolves after the run has been saved.
+ */
+export async function saveEvalRun(run: EvalRun): Promise<void> {
+  await runPromptopsJson(
+    [
+      "eval",
+      "save",
+      "--id",
+      run.id,
+      "--created-at",
+      run.createdAt,
+      "--mode",
+      run.mode,
+      "--model",
+      run.model,
+    ],
+    JSON.stringify(run),
+  );
+  resetDb();
 }
 
+/**
+ * Reads recent evaluation runs from promptops state.
+ *
+ * @param limit - Maximum number of runs to return.
+ * @returns Recent evaluation run payloads.
+ */
 export function recentEvalRuns(limit = 10): EvalRun[] {
   const rows = db()
     .prepare(
@@ -623,63 +368,6 @@ export function recentEvalRuns(limit = 10): EvalRun[] {
     )
     .all(limit) as { payload: string }[];
   return rows.map((row) => JSON.parse(row.payload) as EvalRun);
-}
-
-export function candidateChunks(documentIds: string[]): ChunkRow[] {
-  if (!documentIds.length) {
-    return [];
-  }
-  const marks = documentIds.map(() => "?").join(",");
-  return db()
-    .prepare(
-      `
-      SELECT
-        id,
-        document_id AS documentId,
-        content,
-        content_hash AS contentHash,
-        embedding,
-        embedding_model AS embeddingModel,
-        embedding_dim AS embeddingDim
-      FROM chunks
-      WHERE document_id IN (${marks})
-      LIMIT 200
-      `,
-    )
-    .all(...documentIds) as ChunkRow[];
-}
-
-export function storeEmbedding(input: {
-  chunkId: string;
-  model: string;
-  vector: number[];
-}): void {
-  const array = new Float32Array(input.vector);
-  db()
-    .prepare(
-      `
-      UPDATE chunks SET
-        embedding_model = @model,
-        embedding_dim = @dim,
-        embedding = @embedding
-      WHERE id = @chunkId
-      `,
-    )
-    .run({
-      chunkId: input.chunkId,
-      model: input.model,
-      dim: array.length,
-      embedding: Buffer.from(array.buffer),
-    });
-}
-
-export function decodeEmbedding(buffer: Buffer): number[] {
-  const view = new Float32Array(
-    buffer.buffer,
-    buffer.byteOffset,
-    buffer.byteLength / Float32Array.BYTES_PER_ELEMENT,
-  );
-  return Array.from(view);
 }
 
 function summaryFromRow(row: Row): PromptSummary {
@@ -728,6 +416,11 @@ function parseObject(value: unknown): Record<string, unknown> {
   }
 }
 
+function resetDb(): void {
+  singleton?.close();
+  singleton = null;
+}
+
 function ftsQuery(value: string): string {
   const terms = value
     .split(/\s+/)
@@ -735,8 +428,4 @@ function ftsQuery(value: string): string {
     .filter((term) => term.length > 1)
     .slice(0, 12);
   return terms.map((term) => `"${term}"*`).join(" OR ") || '""';
-}
-
-export function currentEmbeddingModel(): string {
-  return embeddingModel();
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   allSearchableDocuments,
+  ensurePromptopsStateReady,
   facets,
   recentEvalRuns,
   stats,
@@ -10,6 +11,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET() {
+  await ensurePromptopsStateReady();
   return NextResponse.json({
     stats: stats(),
     facets: facets(),

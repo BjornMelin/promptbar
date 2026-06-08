@@ -31,8 +31,11 @@ agent contract for the repo; do not add tool-specific mirror files such as
   bun@1.3.14`; do not introduce npm, pnpm, or yarn lockfiles.
 - Common commands:
   - `bun install`
+  - `bun run promptops:install`
+  - `bun run promptops:doctor`
   - `bun run dev`
   - `bun run db:import /home/bjorn/prompt_library`
+  - `bun run promptops:backfill -- --since-days 30`
   - `bun run lint`
   - `bun run typecheck`
   - `bun run test`
@@ -45,8 +48,11 @@ agent contract for the repo; do not add tool-specific mirror files such as
 
 ## Data And Secrets
 
-- Keep all imported prompt data, SQLite state, managed corpus files, exports,
-  and local runtime artifacts under `.promptbar/`; never track that directory.
+- `promptops` stores authoritative prompt state under
+  `$PROMPTOPS_STATE_DIR` or `~/.local/state/promptops/`. The live database is
+  `promptops.sqlite`.
+- Keep Promptbar UI-local artifacts, exports, and local runtime files under
+  `.promptbar/`; never track that directory.
 - Do not track `.env.local`, real API keys, generated Playwright reports,
   screenshots, coverage, `.next/`, `.turbo/`, or TypeScript build info.
 - `.env.example` is the only env file intended for source control.
@@ -62,15 +68,20 @@ agent contract for the repo; do not add tool-specific mirror files such as
 - Shared request schemas and public data shapes live in `src/lib/shared`.
   Update Zod schemas, TypeScript types, and tests together when changing an API
   contract.
-- `src/lib/server/db.ts` owns the live SQLite initialization and migrations.
-  `src/lib/server/schema.ts` is the Drizzle schema surface. Keep them aligned
-  for table or column changes.
-- `src/lib/server/paths.ts` owns local state paths. Do not duplicate `.promptbar`
-  paths across unrelated modules.
-- `src/lib/server/import-corpus.ts` owns import discovery, normalization,
-  tagging, risk flags, and managed corpus writes.
-- `src/lib/server/ai.ts` owns OpenAI provider creation, hybrid reranking, chat,
-  and eval execution. Preserve local fallbacks when API generation is disabled.
+- Rust crates under `crates/` own promptops schema, migrations, capture,
+  imports, exports, search, embeddings, redaction, overlays, and policy output.
+- `src/lib/server/db.ts` is a Promptbar adapter over promptops state. It may
+  read SQLite directly for fast views and must call `promptops --json` for
+  writes that mutate prompt documents or overlays.
+- `src/lib/server/promptops.ts` owns subprocess calls into promptops. Do not
+  duplicate promptops command assembly elsewhere.
+- `src/lib/server/paths.ts` owns Promptbar UI-local paths plus promptops XDG
+  path discovery. Do not duplicate `.promptbar` or promptops state paths across
+  unrelated modules.
+- `src/lib/server/import-corpus.ts` is an API adapter to `promptops import`; do
+  not rebuild a parallel TypeScript importer.
+- `src/lib/server/ai.ts` owns OpenAI provider creation, chat, and eval
+  execution. Preserve local fallbacks when API generation is disabled.
 - `src/lib/server/codex.ts` owns the explicit Codex bridge. Keep bridge calls
   bounded, local, and read-only unless the user task explicitly asks for edits.
 - Keep `better-sqlite3`, `@parcel/watcher`, filesystem, child-process, and

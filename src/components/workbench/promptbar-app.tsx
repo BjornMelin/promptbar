@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -108,6 +108,7 @@ export function PromptbarApp() {
   const [selected, setSelected] = useState<PromptDetail | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editorValue, setEditorValue] = useState("");
+  const [rawVisible, setRawVisible] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [evalRuns, setEvalRuns] = useState<EvalRun[]>([]);
   const [evalInput, setEvalInput] = useState("Summarize the intended use.");
@@ -120,6 +121,10 @@ export function PromptbarApp() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const selectedRef = useRef<PromptDetail | null>(null);
+  const editorValueRef = useRef("");
+  const rawVisibleRef = useRef(false);
+  const selectionVersionRef = useRef(0);
 
   const chatTransport = useMemo(
     () =>
@@ -130,6 +135,37 @@ export function PromptbarApp() {
     [selectedIds],
   );
   const chat = useChat({ transport: chatTransport });
+
+  useEffect(() => {
+    selectedRef.current = selected;
+    editorValueRef.current = editorValue;
+    rawVisibleRef.current = rawVisible;
+  }, [editorValue, rawVisible, selected]);
+
+  const selectPrompt = useCallback(async (id: string) => {
+    const current = selectedRef.current;
+    if (
+      current &&
+      editorValueRef.current !== currentEditorSource(current, rawVisibleRef.current)
+    ) {
+      const confirmed = window.confirm("Discard unsaved editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const selectionVersion = selectionVersionRef.current + 1;
+    selectionVersionRef.current = selectionVersion;
+    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
+    if (selectionVersion !== selectionVersionRef.current) {
+      return;
+    }
+    setSelected(data.prompt);
+    setRawVisible(false);
+    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
+    setSelectedIds((current) =>
+      current.includes(id) ? current : [id, ...current].slice(0, 8),
+    );
+  }, []);
 
   const refreshSearch = useCallback(async () => {
     const params = new URLSearchParams({
@@ -151,7 +187,7 @@ export function PromptbarApp() {
     if (!selected && data.results[0]) {
       await selectPrompt(data.results[0].id);
     }
-  }, [kind, mode, query, selected, status]);
+  }, [kind, mode, query, selectPrompt, selected, status]);
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -179,7 +215,7 @@ export function PromptbarApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectPrompt]);
 
   useEffect(() => {
     const id = window.setTimeout(() => void bootstrap(), 0);
@@ -197,28 +233,56 @@ export function PromptbarApp() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  async function selectPrompt(id: string) {
-    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
-    setSelected(data.prompt);
-    setEditorValue(data.prompt.content);
-    setSelectedIds((current) =>
-      current.includes(id) ? current : [id, ...current].slice(0, 8),
-    );
-  }
-
   async function saveSelected() {
     if (!selected) {
       return;
     }
+    if (!rawVisible) {
+      setNotice("Reveal raw content before saving content edits.");
+      return;
+    }
     setBusy(true);
-    const data = await patchJson<{ prompt: PromptDetail }>(
-      `/api/prompts/${selected.id}`,
-      { content: editorValue, reason: "Editor save" },
-    );
-    setSelected(data.prompt);
-    setEditorValue(data.prompt.content);
-    await refreshSearch();
-    setBusy(false);
+    try {
+      const data = await patchJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${selected.id}`,
+        { content: editorValue, reason: "Editor save" },
+      );
+      setSelected(data.prompt);
+      setEditorValue(data.prompt.rawContent ?? editorValue);
+      await refreshSearch();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleRawVisible() {
+    if (!selected) {
+      return;
+    }
+    if (rawVisible) {
+      setRawVisible(false);
+      setEditorValue(selected.redactedContent ?? selected.content);
+      return;
+    }
+    const promptId = selected.id;
+    const selectionVersion = selectionVersionRef.current;
+    setBusy(true);
+    try {
+      const data = await getJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${promptId}?raw=1`,
+      );
+      if (
+        selectedRef.current?.id !== promptId ||
+        selectionVersion !== selectionVersionRef.current
+      ) {
+        return;
+      }
+      setSelected(data.prompt);
+      setRawVisible(true);
+      setEditorValue(data.prompt.rawContent ?? data.prompt.content);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function toggleFavorite(prompt: PromptSummary) {
@@ -226,7 +290,12 @@ export function PromptbarApp() {
       `/api/prompts/${prompt.id}`,
       { favorite: !prompt.favorite },
     );
-    setSelected(data.prompt);
+    if (selectedRef.current?.id === prompt.id) {
+      setSelected(data.prompt);
+      if (!rawVisibleRef.current) {
+        setEditorValue(currentEditorSource(data.prompt, false));
+      }
+    }
     await refreshSearch();
   }
 
@@ -463,7 +532,9 @@ export function PromptbarApp() {
                   selected={selected}
                   value={editorValue}
                   busy={busy}
+                  rawVisible={rawVisible}
                   onChange={setEditorValue}
+                  onToggleRaw={toggleRawVisible}
                   onSave={saveSelected}
                   onExport={exportSelected}
                 />
@@ -610,6 +681,12 @@ function Dashboard({
   );
 }
 
+function currentEditorSource(prompt: PromptDetail, rawVisible: boolean): string {
+  return rawVisible
+    ? (prompt.rawContent ?? prompt.content)
+    : (prompt.redactedContent ?? prompt.content);
+}
+
 function SearchView(props: {
   kind: string;
   status: string;
@@ -717,7 +794,9 @@ function EditorView(props: {
   selected: PromptDetail | null;
   value: string;
   busy: boolean;
+  rawVisible: boolean;
   onChange: (value: string) => void;
+  onToggleRaw: () => void;
   onSave: () => Promise<void>;
   onExport: () => Promise<void>;
 }) {
@@ -737,6 +816,14 @@ function EditorView(props: {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              onClick={props.onToggleRaw}
+              className="border-white/10 bg-white/5"
+            >
+              <ShieldCheck className="size-4" />
+              {props.rawVisible ? "Hide raw" : "Reveal raw"}
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => void props.onExport()}
               className="border-white/10 bg-white/5"
             >
@@ -744,7 +831,7 @@ function EditorView(props: {
               Export
             </Button>
             <Button
-              disabled={props.busy}
+              disabled={props.busy || !props.rawVisible}
               onClick={() => void props.onSave()}
               className="bg-[#d1ff3c] text-[#151611]"
             >
@@ -770,6 +857,19 @@ function EditorView(props: {
             <Meta
               label="Hash"
               value={props.selected.contentHash.slice(0, 12)}
+            />
+          </dl>
+        </Panel>
+        <Panel>
+          <PanelHeader icon={ShieldCheck} title="Privacy" />
+          <dl className="space-y-3 text-sm">
+            <Meta
+              label="View"
+              value={props.rawVisible ? "raw local" : "redacted"}
+            />
+            <Meta
+              label="Risk"
+              value={props.selected.riskFlags.join(", ") || "none"}
             />
           </dl>
         </Panel>
@@ -1258,8 +1358,12 @@ function SettingsSheet(props: {
               />
               <Meta label="DB" value={props.settings?.dbPath ?? "pending"} />
               <Meta
-                label="Corpus"
-                value={props.settings?.corpusDir ?? "pending"}
+                label="State"
+                value={
+                  props.settings?.promptopsStateDir ??
+                  props.settings?.corpusDir ??
+                  "pending"
+                }
               />
             </dl>
           </Panel>

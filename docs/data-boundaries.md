@@ -1,13 +1,19 @@
 # Data Boundaries
 
-Promptbar is local-first. Imported prompts, SQLite state, managed files, and
-exports stay under `.promptbar/`.
+Promptbar is local-first. `promptops` owns authoritative prompt state and
+Promptbar owns UI-local artifacts.
 
 ## Local State
 
-- Imported prompt files are managed under `.promptbar/corpus/`.
-- SQLite state lives at `.promptbar/promptbar.sqlite`.
-- Exports are written to `.promptbar/exports/`.
+- `promptops` stores private global state under `$PROMPTOPS_STATE_DIR` or
+  `~/.local/state/promptops/`.
+- The authoritative SQLite database is
+  `~/.local/state/promptops/promptops.sqlite` by default.
+- Codex hooks call `promptops capture hook` and write prompt events into that
+  database.
+- Promptbar reads promptops SQLite directly for fast views and calls
+  `promptops --json` for imports, exports, search jobs, and prompt mutations.
+- Exports are written to `.promptbar/exports/` and are redacted by default.
 - `.promptbar/` is ignored and must not be tracked.
 
 ## Secrets
@@ -23,7 +29,11 @@ Without `PROMPTBAR_OPENAI_API_KEY`, Promptbar must still support lexical FTS
 search, browsing, editing, exports, settings, local eval fallback, and explicit
 Codex bridge status.
 
+Promptops embeddings are opt-in. Hybrid search falls back to lexical results
+unless `PROMPTOPS_EMBED_BASE_URL`, `PROMPTOPS_EMBED_MODEL`, and compatible
+embedding settings are configured.
+
 ## Generated Artifacts
 
 Do not track `.next/`, `.turbo/`, Playwright reports, screenshots, coverage,
-TypeScript build info, or generated local runtime artifacts.
+TypeScript build info, `target/`, or generated local runtime artifacts.

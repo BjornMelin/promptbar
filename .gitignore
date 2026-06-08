@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# rust
+/target/
+
 # next.js
 /.next/
 /out/
@@ -37,6 +40,7 @@ yarn-error.log*
 .turbo/
 test-results/
 playwright-report/
+.playwright-cli/
 coverage/
 screenshots/
 

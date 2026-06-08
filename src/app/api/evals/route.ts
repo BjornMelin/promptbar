@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { runEvalCase } from "@/lib/server/ai";
-import { getPromptContent, recentEvalRuns, saveEvalRun } from "@/lib/server/db";
+import {
+  ensurePromptopsStateReady,
+  getPromptContent,
+  recentEvalRuns,
+  saveEvalRun,
+} from "@/lib/server/db";
 import { openAiModel, repoOpenAiKey } from "@/lib/server/env";
 import { nowIso, stableId } from "@/lib/server/crypto";
 import { evalRunRequestSchema } from "@/lib/shared/schemas";
@@ -9,11 +14,18 @@ import type { EvalRun } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
+/**
+ * Lists recent evaluation runs.
+ *
+ * @returns A JSON response containing recent eval run payloads.
+ */
 export async function GET() {
+  await ensurePromptopsStateReady();
   return NextResponse.json({ runs: recentEvalRuns(20) });
 }
 
 export async function POST(request: Request) {
+  await ensurePromptopsStateReady();
   const body = evalRunRequestSchema.parse(await request.json());
   const prompts = getPromptContent(body.promptIds);
   const results = [];
@@ -31,6 +43,6 @@ export async function POST(request: Request) {
     cases: body.cases,
     results,
   };
-  saveEvalRun(run);
+  await saveEvalRun(run);
   return NextResponse.json({ run });
 }
