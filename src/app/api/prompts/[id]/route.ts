@@ -30,6 +30,13 @@ export async function GET(
   return NextResponse.json({ prompt });
 }
 
+/**
+ * Applies validated editor changes to one prompt document.
+ *
+ * @param request - Incoming HTTP request with a `promptPatchSchema` JSON body.
+ * @param context - Route context whose awaited `params.id` is the prompt id.
+ * @returns A JSON response with the updated prompt, or a 404 JSON error.
+ */
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },

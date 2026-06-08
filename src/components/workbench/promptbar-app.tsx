@@ -124,6 +124,7 @@ export function PromptbarApp() {
   const selectedRef = useRef<PromptDetail | null>(null);
   const editorValueRef = useRef("");
   const rawVisibleRef = useRef(false);
+  const selectionVersionRef = useRef(0);
 
   const chatTransport = useMemo(
     () =>
@@ -152,7 +153,12 @@ export function PromptbarApp() {
         return;
       }
     }
+    const selectionVersion = selectionVersionRef.current + 1;
+    selectionVersionRef.current = selectionVersion;
     const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
+    if (selectionVersion !== selectionVersionRef.current) {
+      return;
+    }
     setSelected(data.prompt);
     setRawVisible(false);
     setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
@@ -236,14 +242,17 @@ export function PromptbarApp() {
       return;
     }
     setBusy(true);
-    const data = await patchJson<{ prompt: PromptDetail }>(
-      `/api/prompts/${selected.id}`,
-      { content: editorValue, reason: "Editor save" },
-    );
-    setSelected(data.prompt);
-    setEditorValue(data.prompt.rawContent ?? editorValue);
-    await refreshSearch();
-    setBusy(false);
+    try {
+      const data = await patchJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${selected.id}`,
+        { content: editorValue, reason: "Editor save" },
+      );
+      setSelected(data.prompt);
+      setEditorValue(data.prompt.rawContent ?? editorValue);
+      await refreshSearch();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function toggleRawVisible() {

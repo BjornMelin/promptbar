@@ -14,6 +14,11 @@ import type { EvalRun } from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
+/**
+ * Lists recent evaluation runs.
+ *
+ * @returns A JSON response containing recent eval run payloads.
+ */
 export async function GET() {
   await ensurePromptopsStateReady();
   return NextResponse.json({ runs: recentEvalRuns(20) });

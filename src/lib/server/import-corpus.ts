@@ -12,6 +12,12 @@ type PromptopsImportReport = {
   at: string;
 };
 
+/**
+ * Imports a prompt corpus through promptops and adapts the report shape.
+ *
+ * @param root - Filesystem root to import as a prompt corpus.
+ * @returns Import summary including root, counts, file total, and timestamp.
+ */
 export async function importCorpus(root: string): Promise<ImportReport> {
   const envelope = await runPromptopsJson<PromptopsImportReport>([
     "import",
