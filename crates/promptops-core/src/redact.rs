@@ -92,12 +92,19 @@ fn redact_private_key_blocks(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
     let mut in_key = false;
     for line in input.lines() {
-        if line.starts_with("-----BEGIN ") && line.contains("PRIVATE KEY-----") {
+        let marker = private_key_marker_line(line);
+        if marker.is_some_and(|marker| {
+            marker.starts_with("-----BEGIN ") && marker.contains("PRIVATE KEY-----")
+        }) {
             in_key = true;
             output.push_str("[REDACTED_PRIVATE_KEY]\n");
             continue;
         }
-        if in_key && line.starts_with("-----END ") && line.contains("PRIVATE KEY-----") {
+        if in_key
+            && marker.is_some_and(|marker| {
+                marker.starts_with("-----END ") && marker.contains("PRIVATE KEY-----")
+            })
+        {
             in_key = false;
             continue;
         }
@@ -107,6 +114,14 @@ fn redact_private_key_blocks(input: &str) -> String {
         }
     }
     output
+}
+
+fn private_key_marker_line(line: &str) -> Option<&str> {
+    let mut marker = line.trim_start();
+    while let Some(rest) = marker.strip_prefix('>') {
+        marker = rest.trim_start();
+    }
+    marker.starts_with("-----").then_some(marker)
 }
 
 fn env_assignment_like(content: &str) -> bool {
@@ -225,5 +240,25 @@ mod tests {
         let redaction = redact("before\n  sk-abcdefghijklmnopqrstuvwxyz\n\tafter");
 
         assert_eq!(redaction.text, "before\n  [REDACTED_OPENAI_KEY]\n\tafter");
+    }
+
+    #[test]
+    fn redacts_indented_and_quoted_private_key_blocks() {
+        let redaction = redact(
+            "before\n  -----BEGIN PRIVATE KEY-----\n  abc123\n  -----END PRIVATE KEY-----\n> -----BEGIN PRIVATE KEY-----\n> def456\n> -----END PRIVATE KEY-----\nafter",
+        );
+
+        assert!(
+            redaction
+                .risk_flags
+                .contains(&"private-key-marker".to_string())
+        );
+        assert_eq!(
+            redaction.text,
+            "before\n[REDACTED_PRIVATE_KEY]\n[REDACTED_PRIVATE_KEY]\nafter\n"
+        );
+        assert!(!redaction.text.contains("abc123"));
+        assert!(!redaction.text.contains("def456"));
+        assert!(!redaction.text.contains("PRIVATE KEY-----"));
     }
 }

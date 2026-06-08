@@ -31,10 +31,11 @@ export async function GET(request: Request) {
     limit: parsed.limit,
   };
   if (parsed.mode === "hybrid") {
-    const args = ["search", parsed.q, "--mode", "hybrid", "--limit", String(parsed.limit)];
+    const args = ["search", "--mode", "hybrid", "--limit", String(parsed.limit)];
     if (parsed.kind) args.push("--kind", parsed.kind);
     if (parsed.status) args.push("--status", parsed.status);
     if (parsed.tag) args.push("--tag", parsed.tag);
+    args.push("--", parsed.q);
     const envelope = await runPromptopsJson<{
       mode: "Lexical" | "Hybrid" | "lexical" | "hybrid";
       query: string;
