@@ -292,7 +292,9 @@ export function PromptbarApp() {
     );
     if (selectedRef.current?.id === prompt.id) {
       setSelected(data.prompt);
-      setEditorValue(currentEditorSource(data.prompt, rawVisibleRef.current));
+      if (!rawVisibleRef.current) {
+        setEditorValue(currentEditorSource(data.prompt, false));
+      }
     }
     await refreshSearch();
   }
