@@ -9,13 +9,15 @@ export const promptStatusSchema = z.enum([
   "redact",
 ]);
 
+export const searchModeSchema = z.enum(["lexical", "hybrid"]);
+
 export const importRequestSchema = z.object({
   root: z.string().min(1).optional(),
 });
 
 export const searchRequestSchema = z.object({
   q: z.string().optional().default(""),
-  mode: z.enum(["lexical", "hybrid"]).optional().default("lexical"),
+  mode: searchModeSchema.optional().default("lexical"),
   kind: z.string().optional(),
   status: promptStatusSchema.optional(),
   tag: z.string().optional(),
