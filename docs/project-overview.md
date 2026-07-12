@@ -25,6 +25,8 @@ exports.
 - `src/components/workbench` contains the primary Promptbar workbench UI.
 - `src/components/ui` contains shadcn/Radix-owned UI primitives.
 - `crates/` contains the promptops Rust core and CLI.
+- `corpus/` contains the bundled canonical prompts, source disposition ledger,
+  and upstream license notice.
 - `src/lib/server` contains server-only Promptbar adapters for promptops,
   SQLite reads, AI, and Codex bridge code.
 - `src/lib/shared` contains shared schemas, types, and tests.

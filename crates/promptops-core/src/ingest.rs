@@ -162,7 +162,10 @@ fn allowed_path(relative: &Path) -> bool {
     if !first.is_some_and(|lane| ROOT_LANES.contains(&lane)) {
         return false;
     }
-    if relative.starts_with("generated") || relative.to_string_lossy().contains("/dogfood-output/")
+    if relative.starts_with("generated")
+        || relative
+            .components()
+            .any(|component| component.as_os_str() == "dogfood-output")
     {
         return false;
     }
@@ -285,21 +288,21 @@ fn read_text(path: &Path) -> Result<String> {
 }
 
 fn kind_for_path(relative: &Path, source_type: &str) -> &'static str {
-    let path = relative.to_string_lossy();
     if source_type == "codex-jsonl" {
-        "codex-raw"
-    } else if path.starts_with("canon/") {
-        "canon"
-    } else if path.starts_with("references/") {
-        "reference"
-    } else if path.starts_with("projects/") {
-        "project"
-    } else if path.starts_with("archive/") {
-        "archive"
-    } else if path.starts_with("manifests/") {
-        "manifest"
-    } else {
-        "imported"
+        return "codex-raw";
+    }
+
+    match relative
+        .components()
+        .next()
+        .and_then(|component| component.as_os_str().to_str())
+    {
+        Some("canon") => "canon",
+        Some("references") => "reference",
+        Some("projects") => "project",
+        Some("archive") => "archive",
+        Some("manifests") => "manifest",
+        _ => "imported",
     }
 }
 
@@ -390,4 +393,37 @@ fn merge_lists(mut left: Vec<String>, right: Vec<String>) -> Vec<String> {
     left.sort();
     left.dedup();
     left
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{allowed_path, kind_for_path};
+    use std::path::Path;
+
+    #[test]
+    fn classifies_import_lanes_by_path_component() {
+        for (lane, expected) in [
+            ("canon", "canon"),
+            ("references", "reference"),
+            ("projects", "project"),
+            ("archive", "archive"),
+            ("manifests", "manifest"),
+            ("tools", "imported"),
+        ] {
+            let relative = Path::new(lane).join("prompt.md");
+            assert_eq!(kind_for_path(&relative, "markdown"), expected);
+        }
+        assert_eq!(
+            kind_for_path(Path::new("canon/prompt.md"), "codex-jsonl"),
+            "codex-raw"
+        );
+    }
+
+    #[test]
+    fn excludes_dogfood_output_by_path_component() {
+        assert!(allowed_path(&Path::new("canon").join("prompt.md")));
+        assert!(!allowed_path(
+            &Path::new("canon").join("dogfood-output").join("prompt.md")
+        ));
+    }
 }
