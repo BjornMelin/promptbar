@@ -27,8 +27,8 @@ agent contract for the repo; do not add tool-specific mirror files such as
 
 ## Package And Commands
 
-- Use Bun as the package manager. The repo declares `packageManager:
-  bun@1.3.14`; do not introduce npm, pnpm, or yarn lockfiles.
+- Use Bun as the package manager. The repo declares `bun@1.3.14` in
+  `packageManager`; do not introduce npm, pnpm, or yarn lockfiles.
 - Common commands:
   - `bun install`
   - `bun run promptops:install`
@@ -111,9 +111,9 @@ agent contract for the repo; do not add tool-specific mirror files such as
   `bun run test:e2e`.
 - For dependency, Next config, build, or server/runtime changes, run
   `bun run build`.
-- Keep Playwright tests in `tests/e2e`; they should use the configured
-  `127.0.0.1:3000` base URL and the built-in web server from
-  `playwright.config.ts`.
+- Keep Playwright tests in `tests/e2e`; they should use the isolated built-in
+  web server from `playwright.config.ts`. The default E2E endpoint is
+  `[::1]:4173`; set `PROMPTBAR_E2E_HOST` or `PROMPTBAR_E2E_PORT` when needed.
 
 ## Pull Request And Release Versioning
 

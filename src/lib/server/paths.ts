@@ -8,19 +8,31 @@ const homeRoot = process.env.HOME ?? path.resolve(".");
 /**
  * Promptbar-local state directory for UI-owned artifacts.
  */
-export const stateDir = path.join(/*turbopackIgnore: true*/ appRoot, ".promptbar");
+export const stateDir = path.join(
+  /*turbopackIgnore: true*/ appRoot,
+  ".promptbar",
+);
 /**
  * Promptbar-local corpus staging directory.
  */
-export const corpusDir = path.join(/*turbopackIgnore: true*/ stateDir, "corpus");
+export const corpusDir = path.join(
+  /*turbopackIgnore: true*/ stateDir,
+  "corpus",
+);
 /**
  * Promptbar-local export output directory.
  */
-export const exportsDir = path.join(/*turbopackIgnore: true*/ stateDir, "exports");
+export const exportsDir = path.join(
+  /*turbopackIgnore: true*/ stateDir,
+  "exports",
+);
 /**
  * Promptbar-local prompt version artifact directory.
  */
-export const versionsDir = path.join(/*turbopackIgnore: true*/ stateDir, "versions");
+export const versionsDir = path.join(
+  /*turbopackIgnore: true*/ stateDir,
+  "versions",
+);
 /**
  * promptops state root containing the authoritative SQLite database.
  */

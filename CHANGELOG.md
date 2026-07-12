@@ -1,5 +1,3 @@
-# Changelog
-
 All notable changes to Promptbar will be documented in this file.
 
 This project uses [Release Please](https://github.com/googleapis/release-please)

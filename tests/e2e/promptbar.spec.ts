@@ -11,7 +11,7 @@ test("loads workbench and navigates primary surfaces", async ({ page }) => {
   await expect(page.getByText("Kind")).toBeVisible();
 
   await navigation.getByRole("button", { name: "Editor" }).click();
-  await expect(page.getByRole("button", { name: /Save/i })).toBeVisible();
+  await expect(page.getByText("No prompt selected")).toBeVisible();
 
   await navigation.getByRole("button", { name: "Evals" }).click();
   await expect(page.getByRole("button", { name: /Run/i })).toBeVisible();

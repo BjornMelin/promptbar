@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  allowedDevOrigins: ["127.0.0.1", "localhost", "[::1]"],
   reactCompiler: true,
   serverExternalPackages: ["better-sqlite3", "@parcel/watcher"],
   turbopack: {

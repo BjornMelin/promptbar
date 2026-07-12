@@ -8,7 +8,11 @@ import {
 } from "@/lib/server/db";
 import { runPromptopsJson } from "@/lib/server/promptops";
 import { searchRequestSchema } from "@/lib/shared/schemas";
-import type { PromptKind, PromptStatus, SearchResponse } from "@/lib/shared/types";
+import type {
+  PromptKind,
+  PromptStatus,
+  SearchResponse,
+} from "@/lib/shared/types";
 
 export const runtime = "nodejs";
 
@@ -31,7 +35,13 @@ export async function GET(request: Request) {
     limit: parsed.limit,
   };
   if (parsed.mode === "hybrid") {
-    const args = ["search", "--mode", "hybrid", "--limit", String(parsed.limit)];
+    const args = [
+      "search",
+      "--mode",
+      "hybrid",
+      "--limit",
+      String(parsed.limit),
+    ];
     if (parsed.kind) args.push("--kind", parsed.kind);
     if (parsed.status) args.push("--status", parsed.status);
     if (parsed.tag) args.push("--tag", parsed.tag);
