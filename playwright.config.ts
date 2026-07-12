@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 const host = process.env.PROMPTBAR_E2E_HOST ?? "::1";
@@ -11,7 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 }
 const urlHost = host.includes(":") ? `[${host}]` : host;
 const baseURL = `http://${urlHost}:${port}`;
-const runRoot = path.resolve(`test-results/e2e-${process.pid}`);
+const runRoot = path.resolve(`test-results/e2e-${process.pid}-${randomUUID()}`);
 const runtimeRoot = path.join(runRoot, "runtime");
 const inheritedEnv = Object.fromEntries(
   Object.entries(process.env).filter(
