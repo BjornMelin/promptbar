@@ -214,16 +214,24 @@ export function PromptbarApp() {
     }
     const selectionVersion = selectionVersionRef.current + 1;
     selectionVersionRef.current = selectionVersion;
-    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
-    if (selectionVersion !== selectionVersionRef.current) {
-      return;
+    try {
+      const data = await getJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${id}`,
+      );
+      if (selectionVersion !== selectionVersionRef.current) {
+        return;
+      }
+      setSelected(data.prompt);
+      setRawVisible(false);
+      setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
+      setSelectedIds((current) =>
+        current.includes(id) ? current : [id, ...current].slice(0, 8),
+      );
+    } catch (error) {
+      if (selectionVersion === selectionVersionRef.current) {
+        toast.error(errorMessage(error, "Unable to open prompt."));
+      }
     }
-    setSelected(data.prompt);
-    setRawVisible(false);
-    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
-    setSelectedIds((current) =>
-      current.includes(id) ? current : [id, ...current].slice(0, 8),
-    );
   }, []);
 
   const runSearch = useCallback(

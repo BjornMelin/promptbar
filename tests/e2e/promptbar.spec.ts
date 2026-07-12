@@ -313,6 +313,35 @@ test("keeps committed search URLs for transient views and restores Search on rel
   expect(new URL(page.url()).search).toBe(committedSearch);
 });
 
+test("keeps valid search results when automatic prompt selection fails", async ({
+  page,
+}) => {
+  await page.route("**/api/prompts/**", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "Prompt detail unavailable.",
+    });
+  });
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await initialSearch;
+
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "Design an agent workflow" }),
+  ).toBeVisible();
+  const detailError = page.getByText("Prompt detail unavailable.", {
+    exact: true,
+  });
+  await expect(detailError).toHaveCount(1);
+  await expect(detailError).toBeVisible();
+  await expect(
+    page.getByText("Unable to search corpus.", { exact: true }),
+  ).toHaveCount(0);
+  expect(new URL(page.url()).search).toBe("?view=search&q=termination");
+});
+
 test("reports command and Editor export failures without leaking rejections", async ({
   page,
 }) => {
