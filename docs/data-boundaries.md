@@ -33,6 +33,20 @@ Promptops embeddings are opt-in. Hybrid search falls back to lexical results
 unless `PROMPTOPS_EMBED_BASE_URL`, `PROMPTOPS_EMBED_MODEL`, and compatible
 embedding settings are configured.
 
+## Cited Refinement
+
+- Refinement is opt-in and unavailable without `PROMPTBAR_OPENAI_API_KEY`.
+- The model receives a numbered list containing only each selected prompt's
+  title and redacted content, capped at 3,000 characters per prompt.
+- Prompt IDs, source paths, corpus paths, raw content, frontmatter, and other
+  local metadata are not included in the model request.
+- The model returns source numbers. Promptbar validates them against the current
+  selection and resolves citations to local prompt IDs and titles on the server.
+- Generated Markdown and citations remain ephemeral UI state. They clear when
+  the goal or selection changes, when another generation starts, or when the
+  page reloads. Copying does not write to promptops, the editor, exports, or
+  browser storage.
+
 ## Generated Artifacts
 
 Do not track `.next/`, `.turbo/`, Playwright reports, screenshots, coverage,

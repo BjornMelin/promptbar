@@ -59,3 +59,29 @@ export const codexRequestSchema = z.object({
   promptIds: z.array(z.string().min(1)).max(8).default([]),
   task: z.string().min(1).max(4000),
 });
+
+/** Validates a bounded, unique set of prompts and its refinement goal. */
+export const refinementRequestSchema = z.strictObject({
+  promptIds: z
+    .array(z.string().trim().min(1))
+    .min(1)
+    .max(8)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      error: "Prompt ids must be unique.",
+    }),
+  instruction: z.string().trim().min(1).max(4000),
+});
+
+/** Validates a generated refinement and its server-resolved citations. */
+export const refinementResponseSchema = z.strictObject({
+  promptMarkdown: z.string().trim().min(1).max(20_000),
+  citations: z
+    .array(
+      z.strictObject({
+        promptId: z.string().trim().min(1),
+        title: z.string().trim().min(1),
+      }),
+    )
+    .min(1)
+    .max(8),
+});

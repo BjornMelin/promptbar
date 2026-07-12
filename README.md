@@ -20,6 +20,10 @@ iteration, and reviewable exports back to the source repository.
   but not selections or editor state, so review the query before sharing.
 - **Evaluate with guardrails:** run local fallback evals by default, then opt in
   to repo-scoped OpenAI features only when `PROMPTBAR_OPENAI_API_KEY` is set.
+- **Refine with verified sources:** select up to eight prompts, describe the
+  desired result, and generate one copy-ready Markdown prompt with citations
+  resolved to those selected Promptbar records. Refinements are never saved
+  automatically.
 - **Export with confidence:** keep generated artifacts under `.promptbar/` and
   review exports before moving polished prompt changes upstream.
 
@@ -37,6 +41,9 @@ iteration, and reviewable exports back to the source repository.
   reviewed exports.
 - AI features only read `PROMPTBAR_OPENAI_API_KEY` from this repo's local
   environment. Global `OPENAI_API_KEY` is intentionally ignored.
+- Cited refinement sends only each selected prompt's title and redacted content
+  to the configured model. Promptbar resolves returned source numbers to local
+  prompt IDs on the server; generated prompts are not saved automatically.
 - Without a repo-scoped key, Promptbar remains usable with local FTS search,
   editing, exports, local eval fallback, and explicit Codex bridge status.
 
