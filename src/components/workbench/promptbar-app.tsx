@@ -48,7 +48,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -118,7 +123,7 @@ const ALL_FILTER_OPTION = "all";
 const FACET_FILTER_PREFIX = "facet:";
 
 export function PromptbarApp() {
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setViewState] = useState<View>("dashboard");
   const [query, setQuery] = useState(DEFAULT_SEARCH_URL_STATE.query);
   const [mode, setMode] = useState<SearchMode>(DEFAULT_SEARCH_URL_STATE.mode);
   const [kind, setKind] = useState<SearchUrlState["kind"]>(
@@ -156,6 +161,12 @@ export function PromptbarApp() {
   const selectionVersionRef = useRef(0);
   const resultsAbortRef = useRef<AbortController | null>(null);
   const locationVersionRef = useRef(0);
+  const viewRef = useRef<View>("dashboard");
+
+  const setView = useCallback((nextView: View) => {
+    viewRef.current = nextView;
+    setViewState(nextView);
+  }, []);
 
   const chatTransport = useMemo(
     () =>
@@ -216,7 +227,11 @@ export function PromptbarApp() {
   }, []);
 
   const runSearch = useCallback(
-    async (nextState: SearchUrlState, historyMode: SearchHistoryMode) => {
+    async (
+      nextState: SearchUrlState,
+      historyMode: SearchHistoryMode,
+      announceRefreshError = false,
+    ) => {
       const controller = beginResultsLoad();
       setSearchError("");
       if (historyMode !== "none") {
@@ -268,7 +283,11 @@ export function PromptbarApp() {
         ) {
           setResults([]);
           setNotice("");
-          setSearchError(errorMessage(error, "Unable to search corpus."));
+          const message = errorMessage(error, "Unable to search corpus.");
+          setSearchError(message);
+          if (announceRefreshError && viewRef.current !== "search") {
+            toast.error(message);
+          }
         }
       } finally {
         if (resultsAbortRef.current === controller) {
@@ -276,15 +295,12 @@ export function PromptbarApp() {
         }
       }
     },
-    [applySearchState, beginResultsLoad, selectPrompt],
+    [applySearchState, beginResultsLoad, selectPrompt, setView],
   );
 
-  const restoreDashboard = useCallback(
-    async (seed?: CorpusResponse) => {
+  const loadCorpusResults = useCallback(
+    async (seed?: CorpusResponse, announceRefreshError = false) => {
       const controller = beginResultsLoad();
-      applySearchState(DEFAULT_SEARCH_URL_STATE);
-      setView("dashboard");
-      setResults([]);
       setNotice("");
       setSearchError("");
 
@@ -313,7 +329,15 @@ export function PromptbarApp() {
           resultsAbortRef.current === controller &&
           !isAbortError(error)
         ) {
-          setNotice(errorMessage(error, "Unable to open corpus."));
+          const message = errorMessage(error, "Unable to open corpus.");
+          setNotice(message);
+          if (
+            announceRefreshError &&
+            viewRef.current !== "dashboard" &&
+            viewRef.current !== "search"
+          ) {
+            toast.error(message);
+          }
         }
       } finally {
         if (resultsAbortRef.current === controller) {
@@ -321,7 +345,17 @@ export function PromptbarApp() {
         }
       }
     },
-    [applySearchState, beginResultsLoad, selectPrompt],
+    [beginResultsLoad, selectPrompt],
+  );
+
+  const restoreDashboard = useCallback(
+    (seed?: CorpusResponse) => {
+      applySearchState(DEFAULT_SEARCH_URL_STATE);
+      setView("dashboard");
+      setResults([]);
+      return loadCorpusResults(seed);
+    },
+    [applySearchState, loadCorpusResults, setView],
   );
 
   const bootstrap = useCallback(async () => {
@@ -388,10 +422,12 @@ export function PromptbarApp() {
     [draftSearch, runSearch],
   );
 
-  const refreshCommittedSearch = useCallback(
-    () => runSearch(searchStateFromLocation(), "none"),
-    [runSearch],
-  );
+  const refreshCurrentResults = useCallback(() => {
+    const committedSearch = parseSearchUrl(window.location.search);
+    return committedSearch
+      ? runSearch(committedSearch, "none", true)
+      : loadCorpusResults(undefined, true);
+  }, [loadCorpusResults, runSearch]);
 
   const copySearchLink = useCallback(async () => {
     writeSearchHistory(searchStateFromLocation(), "replace");
@@ -433,7 +469,7 @@ export function PromptbarApp() {
       );
       setSelected(data.prompt);
       setEditorValue(data.prompt.rawContent ?? editorValue);
-      await refreshCommittedSearch();
+      await refreshCurrentResults();
     } finally {
       setBusy(false);
     }
@@ -480,7 +516,7 @@ export function PromptbarApp() {
         setEditorValue(currentEditorSource(data.prompt, false));
       }
     }
-    await refreshCommittedSearch();
+    await refreshCurrentResults();
   }
 
   async function runEval() {
@@ -640,7 +676,7 @@ export function PromptbarApp() {
                   }
                 }}
                 placeholder="Search corpus"
-                className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                className="h-8 border-0 bg-transparent px-0 text-base shadow-none md:text-sm"
               />
               <Select
                 value={mode}
@@ -769,7 +805,7 @@ export function PromptbarApp() {
         open={commandOpen}
         onOpen={setCommandOpen}
         onView={setView}
-        onRefresh={refreshCommittedSearch}
+        onRefresh={refreshCurrentResults}
         onExport={exportSelected}
       />
       <SettingsSheet
@@ -1544,6 +1580,9 @@ function CommandDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpen}>
       <DialogContent className="border-white/10 bg-[#151611] p-0 text-[#f8f6ee]">
         <DialogTitle className="sr-only">Command</DialogTitle>
+        <DialogDescription className="sr-only">
+          Navigate Promptbar or run a workbench action.
+        </DialogDescription>
         <Command className="bg-transparent">
           <CommandInput placeholder="Command" />
           <CommandList>
@@ -1563,11 +1602,21 @@ function CommandDialog(props: {
               ))}
             </CommandGroup>
             <CommandGroup heading="Actions">
-              <CommandItem onSelect={() => void props.onRefresh()}>
+              <CommandItem
+                onSelect={() => {
+                  props.onOpen(false);
+                  void props.onRefresh();
+                }}
+              >
                 <RefreshCw className="size-4" />
                 Refresh index
               </CommandItem>
-              <CommandItem onSelect={() => void props.onExport()}>
+              <CommandItem
+                onSelect={() => {
+                  props.onOpen(false);
+                  void props.onExport();
+                }}
+              >
                 <Download className="size-4" />
                 Export context
               </CommandItem>

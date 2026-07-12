@@ -11,10 +11,12 @@ export type PromptKind =
   | "manifest"
   | "imported";
 
+/** Enumerates lifecycle states accepted by prompt records and filters. */
 export type PromptStatus = z.infer<typeof promptStatusSchema>;
 
 export type AiMode = "local" | "api" | "codex";
 
+/** Enumerates the supported lexical and embedding-assisted search modes. */
 export type SearchMode = z.infer<typeof searchModeSchema>;
 
 export type PromptSummary = {

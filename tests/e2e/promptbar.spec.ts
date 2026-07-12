@@ -36,6 +36,157 @@ test("loads workbench and navigates primary surfaces", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Run/i })).toBeVisible();
 });
 
+test("keeps workbench inputs mobile-safe with visible focus", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const search = page.getByRole("textbox", { name: "Search corpus" });
+  await search.focus();
+
+  const styles = await search.evaluate((element) => {
+    const computed = window.getComputedStyle(element);
+    return {
+      boxShadow: computed.boxShadow,
+      fontSize: Number.parseFloat(computed.fontSize),
+    };
+  });
+  expect(styles.boxShadow).not.toBe("none");
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    expect(styles.fontSize).toBeGreaterThanOrEqual(16);
+  }
+
+  await page.getByRole("button", { name: "Command" }).click();
+  const command = page.getByPlaceholder("Command");
+  await command.focus();
+  const commandStyles = await command.evaluate((element) => {
+    const input = window.getComputedStyle(element);
+    const group = element.closest<HTMLElement>("[data-slot=input-group]");
+    return {
+      fontSize: Number.parseFloat(input.fontSize),
+      groupBoxShadow: group ? window.getComputedStyle(group).boxShadow : "none",
+    };
+  });
+  expect(commandStyles.groupBoxShadow).not.toBe("none");
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    expect(commandStyles.fontSize).toBeGreaterThanOrEqual(16);
+  }
+});
+
+test("refreshes corpus data without changing a non-search view or URL", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const navigation = page.getByRole("complementary");
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+
+  const initialUrl = page.url();
+  const searchRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/search") {
+      searchRequests.push(request.url());
+    }
+  });
+
+  await page.getByRole("button", { name: "Command" }).click();
+  const corpusResponse = page.waitForResponse((response) => {
+    return response.ok() && new URL(response.url()).pathname === "/api/corpus";
+  });
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await corpusResponse;
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+  expect(page.url()).toBe(initialUrl);
+  expect(searchRequests).toEqual([]);
+
+  await page.route("**/api/corpus", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "",
+    });
+  });
+  await page.getByRole("button", { name: "Command" }).click();
+  const failedCorpusResponse = page.waitForResponse((response) => {
+    return (
+      response.status() === 500 &&
+      new URL(response.url()).pathname === "/api/corpus"
+    );
+  });
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await failedCorpusResponse;
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+
+  await expect(
+    page.getByText("Unable to open corpus.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+  await expect(page.getByText(/^6 prompts ·/i)).toBeVisible();
+  expect(page.url()).toBe(initialUrl);
+  expect(searchRequests).toEqual([]);
+});
+
+test("announces refresh failures in the view active when they settle", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const navigation = page.getByRole("complementary");
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+
+  let markRequestStarted!: () => void;
+  const requestStarted = new Promise<void>((resolve) => {
+    markRequestStarted = resolve;
+  });
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/corpus", async (route) => {
+    markRequestStarted();
+    await responseGate;
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "",
+    });
+  });
+
+  const initialUrl = page.url();
+  await page.getByRole("button", { name: "Command" }).click();
+  const failedCorpusResponse = page.waitForResponse((response) => {
+    return (
+      response.status() === 500 &&
+      new URL(response.url()).pathname === "/api/corpus"
+    );
+  });
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await requestStarted;
+
+  await navigation.getByRole("button", { name: "Dashboard" }).click();
+  releaseResponse();
+  await failedCorpusResponse;
+
+  const errorMessage = page.getByText("Unable to open corpus.", {
+    exact: true,
+  });
+  await expect(errorMessage).toHaveCount(1);
+  await expect(errorMessage).toBeVisible();
+  await expect(page.getByText(/^6 prompts ·/i)).toBeVisible();
+  expect(page.url()).toBe(initialUrl);
+});
+
 test("hydrates shareable filters and restores committed search history", async ({
   page,
 }) => {

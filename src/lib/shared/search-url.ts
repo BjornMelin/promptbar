@@ -6,6 +6,7 @@ import type { PromptStatus, SearchMode } from "./types";
 const querySchema = z.string();
 const facetSchema = z.string().min(1);
 
+/** Describes the canonical public search state encoded in a shareable URL. */
 export type SearchUrlState = {
   query: string;
   mode: SearchMode;
@@ -14,6 +15,7 @@ export type SearchUrlState = {
   tag: string | null;
 };
 
+/** Provides the search state used when a shareable URL omits optional filters. */
 export const DEFAULT_SEARCH_URL_STATE: SearchUrlState = {
   query: "",
   mode: "lexical",
@@ -23,8 +25,10 @@ export const DEFAULT_SEARCH_URL_STATE: SearchUrlState = {
 };
 
 /**
- * Parses a shareable search URL without allowing one invalid field to erase
- * the other valid filters.
+ * Parses a shareable search URL while preserving valid fields beside invalid ones.
+ *
+ * @param search - URL search parameters, including an optional leading question mark.
+ * @returns The parsed search state, or null when the URL does not select search.
  */
 export function parseSearchUrl(search: string): SearchUrlState | null {
   const params = new URLSearchParams(search);
@@ -61,7 +65,12 @@ export function parseSearchUrl(search: string): SearchUrlState | null {
   };
 }
 
-/** Serializes only public search state in one stable order. */
+/**
+ * Serializes public search state into canonical URL parameter order.
+ *
+ * @param state - Public search state to encode.
+ * @returns URL search parameters with a leading question mark.
+ */
 export function serializeSearchUrl(state: SearchUrlState): string {
   const params = new URLSearchParams();
   params.set("view", "search");

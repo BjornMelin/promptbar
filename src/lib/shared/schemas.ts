@@ -9,12 +9,15 @@ export const promptStatusSchema = z.enum([
   "redact",
 ]);
 
+/** Enumerates the supported modes for canonical search requests. */
 export const searchModeSchema = z.enum(["lexical", "hybrid"]);
 
+/** Validates an import request that may override the corpus root. */
 export const importRequestSchema = z.object({
   root: z.string().min(1).optional(),
 });
 
+/** Validates search API parameters and applies their request defaults. */
 export const searchRequestSchema = z.object({
   q: z.string().optional().default(""),
   mode: searchModeSchema.optional().default("lexical"),
