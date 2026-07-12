@@ -14,12 +14,10 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   const body = exportRequestSchema.parse(await request.json());
-  const envelope = await runPromptopsJson<{ files: string[]; exported: number }>([
-    "export",
-    "--out",
-    exportsDir,
-    ...body.promptIds,
-  ]);
+  const envelope = await runPromptopsJson<{
+    files: string[];
+    exported: number;
+  }>(["export", "--out", exportsDir, ...body.promptIds]);
   return NextResponse.json({
     filePath: envelope.data.files[0] ?? exportsDir,
     files: envelope.data.files,

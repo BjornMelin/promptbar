@@ -70,7 +70,9 @@ export function stats(): CorpusStats {
     documents: one("SELECT COUNT(*) AS count FROM documents"),
     chunks: one("SELECT COUNT(*) AS count FROM chunks"),
     favorites: one("SELECT COUNT(*) AS count FROM documents WHERE favorite=1"),
-    risks: one("SELECT COUNT(*) AS count FROM documents WHERE risk_flags_json!='[]'"),
+    risks: one(
+      "SELECT COUNT(*) AS count FROM documents WHERE risk_flags_json!='[]'",
+    ),
     evalRuns: one("SELECT COUNT(*) AS count FROM eval_runs"),
     embeddedChunks: one(
       "SELECT COUNT(*) AS count FROM chunks WHERE embedding IS NOT NULL",
@@ -180,9 +182,11 @@ export function searchDocuments(input: {
 
   const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
   const order = query ? "score DESC, d.updated_at DESC" : "d.updated_at DESC";
-  return (db()
-    .prepare(`${sql}${whereSql} ORDER BY ${order} LIMIT ?`)
-    .all(...args, input.limit) as Row[]).map(summaryFromRow);
+  return (
+    db()
+      .prepare(`${sql}${whereSql} ORDER BY ${order} LIMIT ?`)
+      .all(...args, input.limit) as Row[]
+  ).map(summaryFromRow);
 }
 
 /**
@@ -192,9 +196,13 @@ export function searchDocuments(input: {
  * @returns Recent prompt summaries ordered by update time.
  */
 export function allSearchableDocuments(limit = 80): PromptSummary[] {
-  return (db()
-    .prepare("SELECT *, 0.0 AS score FROM documents ORDER BY updated_at DESC LIMIT ?")
-    .all(limit) as Row[]).map(summaryFromRow);
+  return (
+    db()
+      .prepare(
+        "SELECT *, 0.0 AS score FROM documents ORDER BY updated_at DESC LIMIT ?",
+      )
+      .all(limit) as Row[]
+  ).map(summaryFromRow);
 }
 
 /**
@@ -311,18 +319,18 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
     return [];
   }
   const clauses = tags.map(() => "tags_json LIKE ?").join(" OR ");
-  return (db()
-    .prepare(
-      `
+  return (
+    db()
+      .prepare(
+        `
       SELECT *, 0.0 AS score FROM documents
       WHERE id != ? AND (${clauses})
       ORDER BY updated_at DESC
       LIMIT 6
       `,
-    )
-    .all(prompt.id, ...tags.map((tag) => `%"${tag}"%`)) as Row[]).map(
-    summaryFromRow,
-  );
+      )
+      .all(prompt.id, ...tags.map((tag) => `%"${tag}"%`)) as Row[]
+  ).map(summaryFromRow);
 }
 
 /**

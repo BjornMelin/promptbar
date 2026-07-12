@@ -65,7 +65,9 @@ export async function runPromptopsJson<T>(
       (error, stdout, stderr) => {
         if (error) {
           const detail = stderr.trim() || error.message;
-          reject(new Error(`promptops ${args[0] ?? "command"} failed: ${detail}`));
+          reject(
+            new Error(`promptops ${args[0] ?? "command"} failed: ${detail}`),
+          );
           return;
         }
         resolve(stdout);

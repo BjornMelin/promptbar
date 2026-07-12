@@ -146,7 +146,8 @@ export function PromptbarApp() {
     const current = selectedRef.current;
     if (
       current &&
-      editorValueRef.current !== currentEditorSource(current, rawVisibleRef.current)
+      editorValueRef.current !==
+        currentEditorSource(current, rawVisibleRef.current)
     ) {
       const confirmed = window.confirm("Discard unsaved editor changes?");
       if (!confirmed) {
@@ -681,7 +682,10 @@ function Dashboard({
   );
 }
 
-function currentEditorSource(prompt: PromptDetail, rawVisible: boolean): string {
+function currentEditorSource(
+  prompt: PromptDetail,
+  rawVisible: boolean,
+): string {
   return rawVisible
     ? (prompt.rawContent ?? prompt.content)
     : (prompt.redactedContent ?? prompt.content);

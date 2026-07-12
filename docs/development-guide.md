@@ -36,6 +36,13 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 ```
 
+Playwright starts its own server on `[::1]:4173`, refuses to attach to an
+existing server, and uses unique Promptbar and promptops state under
+`test-results/e2e-<pid>-<uuid>/runtime`. Set `PROMPTBAR_E2E_PORT` to choose
+another port or set `PROMPTBAR_E2E_HOST` to `localhost` or `127.0.0.1`. The E2E
+run clears repository-scoped API credentials and covers desktop and mobile
+Chromium with one worker because both projects share one SQLite state.
+
 For broad validation, use:
 
 ```bash
