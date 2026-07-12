@@ -55,7 +55,10 @@ export async function POST(request: Request) {
     });
     const response = refinementResponseSchema.safeParse(refinement);
     if (!response.success) {
-      throw new Error("Generated refinement failed validation.");
+      return NextResponse.json(
+        { error: "Unable to generate refinement." },
+        { status: 502 },
+      );
     }
     return NextResponse.json(response.data);
   } catch {

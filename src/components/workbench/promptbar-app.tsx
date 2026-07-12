@@ -1379,7 +1379,7 @@ function ChatView(props: {
                   {props.refining && (
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
                   )}
-                  {props.refining ? "Generating..." : "Generate prompt"}
+                  {props.refining ? "Generating…" : "Generate prompt"}
                 </Button>
               </form>
               {props.refinementError && (

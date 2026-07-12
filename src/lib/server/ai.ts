@@ -82,6 +82,8 @@ export async function runEvalCase(input: {
  *
  * @param input - The refinement goal and selected redacted prompt fields.
  * @returns Generated markdown with citations resolved to Promptbar ids.
+ * @throws {Error} When the provider is unavailable, a citation cannot be
+ *   resolved, or the generated response fails validation.
  */
 export async function generateRefinement(input: {
   instruction: string;
