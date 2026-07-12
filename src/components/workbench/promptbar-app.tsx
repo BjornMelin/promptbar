@@ -426,7 +426,7 @@ export function PromptbarApp() {
   );
 
   const executeSearch = useCallback(
-    () => runSearch(draftSearch, "push"),
+    () => runSearch(draftSearch, "push", true),
     [draftSearch, runSearch],
   );
 
@@ -436,6 +436,12 @@ export function PromptbarApp() {
       ? runSearch(committedSearch, "none", true)
       : loadCorpusResults(undefined, true);
   }, [loadCorpusResults, runSearch]);
+
+  const refreshFromCommand = useCallback(() => {
+    return viewRef.current === "search"
+      ? executeSearch()
+      : refreshCurrentResults();
+  }, [executeSearch, refreshCurrentResults]);
 
   const navigateView = useCallback(
     (nextView: View) => {
@@ -834,7 +840,7 @@ export function PromptbarApp() {
         open={commandOpen}
         onOpen={setCommandOpen}
         onView={navigateView}
-        onRefresh={refreshCurrentResults}
+        onRefresh={refreshFromCommand}
         onExport={exportSelected}
       />
       <SettingsSheet

@@ -133,6 +133,116 @@ test("refreshes corpus data without changing a non-search view or URL", async ({
   expect(searchRequests).toEqual([]);
 });
 
+test("refreshes the visible Search draft from the command palette", async ({
+  page,
+}) => {
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await initialSearch;
+
+  await page.getByRole("textbox", { name: "Search corpus" }).fill("database");
+  const corpusRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/corpus") {
+      corpusRequests.push(request.url());
+    }
+  });
+  await page.getByRole("button", { name: "Command" }).click();
+  const draftSearch = waitForSearch(page, "database");
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await draftSearch;
+
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).search)
+    .toBe("?view=search&q=database");
+  await expect(
+    page.getByRole("heading", { name: "Plan a database change" }),
+  ).toBeVisible();
+  expect(corpusRequests).toEqual([]);
+});
+
+test("announces a failed Search command refresh in the active transient view", async ({
+  page,
+}) => {
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await initialSearch;
+
+  let markRequestStarted!: () => void;
+  const requestStarted = new Promise<void>((resolve) => {
+    markRequestStarted = resolve;
+  });
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/search?**", async (route) => {
+    markRequestStarted();
+    await responseGate;
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "Search refresh unavailable.",
+    });
+  });
+
+  await page.getByRole("textbox", { name: "Search corpus" }).fill("broken");
+  await page.getByRole("button", { name: "Command" }).click();
+  const failedSearch = waitForFailedSearch(page, "broken");
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await requestStarted;
+  await page
+    .getByRole("complementary")
+    .getByRole("button", { name: "Editor" })
+    .click();
+  releaseResponse();
+  await failedSearch;
+
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+  const searchError = page.getByText("Search refresh unavailable.", {
+    exact: true,
+  });
+  await expect(searchError).toHaveCount(1);
+  await expect(searchError).toBeVisible();
+  expect(new URL(page.url()).search).toBe("?view=search&q=broken");
+});
+
+test("keeps mutation refreshes on the committed Search state", async ({
+  page,
+}) => {
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await initialSearch;
+
+  await page.getByRole("textbox", { name: "Search corpus" }).fill("database");
+  const committedRefresh = waitForSearch(page, "termination");
+  const favoriteUpdate = page.waitForResponse((response) => {
+    return (
+      response.ok() &&
+      response.request().method() === "PATCH" &&
+      new URL(response.url()).pathname.startsWith("/api/prompts/")
+    );
+  });
+  await page.getByRole("button", { name: "Favorite" }).click();
+  await favoriteUpdate;
+  await committedRefresh;
+
+  await expect(
+    page.getByRole("textbox", { name: "Search corpus" }),
+  ).toHaveValue("database");
+  await expect(
+    page.getByRole("heading", { name: "Design an agent workflow" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).search).toBe("?view=search&q=termination");
+});
+
 test("announces refresh failures in the view active when they settle", async ({
   page,
 }) => {
