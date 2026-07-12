@@ -70,6 +70,336 @@ test("keeps workbench inputs mobile-safe with visible focus", async ({
   if ((page.viewportSize()?.width ?? 0) < 768) {
     expect(commandStyles.fontSize).toBeGreaterThanOrEqual(16);
   }
+
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("complementary")
+    .getByRole("button", { name: "AI" })
+    .click();
+  const refinementGoal = page.getByRole("textbox", {
+    name: "Refinement goal",
+  });
+  await refinementGoal.focus();
+  const refinementFontSize = await refinementGoal.evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).fontSize),
+  );
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    expect(refinementFontSize).toBeGreaterThanOrEqual(16);
+  }
+});
+
+test("keeps refinement unavailable without a repo API key", async ({
+  page,
+}) => {
+  let refinementRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/refine") {
+      refinementRequests += 1;
+    }
+  });
+
+  await page.goto("/");
+  await page
+    .getByRole("complementary")
+    .getByRole("button", { name: "AI" })
+    .click();
+
+  await expect(
+    page.getByText(/PROMPTBAR_OPENAI_API_KEY.*refinement and chat/),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Refinement goal" })
+    .fill("Create a focused implementation prompt.");
+  await expect(
+    page.getByRole("button", { name: "Generate prompt" }),
+  ).toBeDisabled();
+  expect(refinementRequests).toBe(0);
+});
+
+test("generates a cited prompt without changing the URL or editor", async ({
+  page,
+}) => {
+  const promptMarkdown =
+    "# Implementation brief\n\nUse the selected constraints and return a verified result.";
+  const refinementGoal = "Combine the selected guidance into one prompt.";
+  const requestBodies: unknown[] = [];
+  const pageErrors: Error[] = [];
+  let expectedPromptId = "";
+  let refinementAttempt = 0;
+
+  page.on("pageerror", (error) => pageErrors.push(error));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          (window as Window & { copiedRefinement?: string }).copiedRefinement =
+            value;
+        },
+      },
+    });
+  });
+  await mockApiEnabledSettings(page);
+  await page.route("**/api/refine", async (route) => {
+    refinementAttempt += 1;
+    requestBodies.push(route.request().postDataJSON());
+    if (refinementAttempt === 1) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          promptMarkdown,
+          citations: [
+            {
+              promptId: expectedPromptId,
+              title: "Design an agent workflow",
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    if (refinementAttempt === 2) {
+      await route.fulfill({
+        status: 502,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Unable to generate refinement." }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "",
+    });
+  });
+
+  const searchResponsePromise = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  const searchResponse = await searchResponsePromise;
+  const searchPayload = (await searchResponse.json()) as {
+    results: Array<{ id: string }>;
+  };
+  expectedPromptId = searchPayload.results[0]?.id ?? "";
+  expect(expectedPromptId).not.toBe("");
+  const committedUrl = page.url();
+
+  const navigation = page.getByRole("complementary");
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  const editor = page.locator(".cm-content");
+  await expect(editor).toBeVisible();
+  const editorBefore = await editor.textContent();
+  await navigation.getByRole("button", { name: "AI" }).click();
+
+  await page
+    .getByRole("textbox", { name: "Refinement goal" })
+    .fill(refinementGoal);
+  const successfulRefinement = page.waitForResponse((response) => {
+    return (
+      response.status() === 200 &&
+      new URL(response.url()).pathname === "/api/refine"
+    );
+  });
+  await page.getByRole("button", { name: "Generate prompt" }).click();
+  await successfulRefinement;
+
+  expect(requestBodies[0]).toEqual({
+    promptIds: [expectedPromptId],
+    instruction: refinementGoal,
+  });
+  await expect(
+    page.getByText("Refinement ready with 1 citation.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Generated prompt" }),
+  ).toBeVisible();
+  await expect(page.locator("pre code")).toHaveText(promptMarkdown);
+  const citation = page
+    .getByRole("listitem")
+    .filter({ hasText: expectedPromptId });
+  await expect(citation).toContainText("Design an agent workflow");
+  await expect(citation).toContainText(expectedPromptId);
+  expect(page.url()).toBe(committedUrl);
+
+  await page.getByRole("button", { name: "Copy prompt" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { copiedRefinement?: string }).copiedRefinement,
+      ),
+    )
+    .toBe(promptMarkdown);
+  await expect(page.getByText("Prompt copied.", { exact: true })).toBeVisible();
+
+  await navigation.getByRole("button", { name: "Evals" }).click();
+  await navigation.getByRole("button", { name: "AI" }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw new Error("Clipboard denied");
+        },
+      },
+    });
+  });
+  await page.getByRole("button", { name: "Copy prompt" }).click();
+  await expect(
+    page.getByText(
+      "Couldn’t copy prompt. Select the displayed Markdown manually.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+
+  const goalInput = page.getByRole("textbox", { name: "Refinement goal" });
+  await goalInput.fill(`${refinementGoal} Updated.`);
+  await expect(
+    page.getByRole("heading", { name: "Generated prompt" }),
+  ).toHaveCount(0);
+  await goalInput.fill(refinementGoal);
+
+  await navigation.getByRole("button", { name: "Search" }).click();
+  const contextSwitch = page.getByRole("switch", {
+    name: "Include Design an agent workflow in AI context",
+  });
+  await contextSwitch.click();
+  await navigation.getByRole("button", { name: "AI" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Generated prompt" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "Refinement goal" }),
+  ).toHaveValue(refinementGoal);
+  await expect(
+    page.getByRole("button", { name: "Generate prompt" }),
+  ).toBeDisabled();
+
+  await navigation.getByRole("button", { name: "Search" }).click();
+  await contextSwitch.click();
+  await navigation.getByRole("button", { name: "AI" }).click();
+
+  const failedRefinement = page.waitForResponse((response) => {
+    return (
+      response.status() === 502 &&
+      new URL(response.url()).pathname === "/api/refine"
+    );
+  });
+  await page.getByRole("button", { name: "Generate prompt" }).click();
+  await failedRefinement;
+
+  expect(requestBodies[1]).toEqual({
+    promptIds: [expectedPromptId],
+    instruction: refinementGoal,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Generated prompt" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Unable to generate refinement.", { exact: true }),
+  ).toHaveAttribute("role", "alert");
+  await expect(
+    page.getByRole("button", { name: "Generate prompt" }),
+  ).toBeEnabled();
+
+  const emptyFailure = page.waitForResponse((response) => {
+    return (
+      response.status() === 500 &&
+      new URL(response.url()).pathname === "/api/refine"
+    );
+  });
+  await page.getByRole("button", { name: "Generate prompt" }).click();
+  await emptyFailure;
+  expect(requestBodies[2]).toEqual({
+    promptIds: [expectedPromptId],
+    instruction: refinementGoal,
+  });
+  await expect(
+    page.getByText("Unable to refine selected prompts.", { exact: true }),
+  ).toHaveAttribute("role", "alert");
+  expect(page.url()).toBe(committedUrl);
+  expect(pageErrors).toEqual([]);
+
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  await expect(editor).toHaveText(editorBefore ?? "");
+  expect(page.url()).toBe(committedUrl);
+});
+
+test("ignores a refinement response after the selection changes", async ({
+  page,
+}) => {
+  const goal = "Create one implementation prompt.";
+  const pageErrors: Error[] = [];
+  let markRequestStarted!: () => void;
+  const requestStarted = new Promise<void>((resolve) => {
+    markRequestStarted = resolve;
+  });
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+
+  page.on("pageerror", (error) => pageErrors.push(error));
+  await mockApiEnabledSettings(page);
+  await page.route("**/api/refine", async (route) => {
+    const body = route.request().postDataJSON() as { promptIds: string[] };
+    markRequestStarted();
+    await responseGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        promptMarkdown: "# Stale result",
+        citations: [
+          {
+            promptId: body.promptIds[0],
+            title: "Design an agent workflow",
+          },
+        ],
+      }),
+    });
+  });
+
+  const searchResponse = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await searchResponse;
+  const committedUrl = page.url();
+  const navigation = page.getByRole("complementary");
+  await navigation.getByRole("button", { name: "AI" }).click();
+  await page.getByRole("textbox", { name: "Refinement goal" }).fill(goal);
+  const staleResponse = page.waitForResponse((response) => {
+    return (
+      response.status() === 200 &&
+      new URL(response.url()).pathname === "/api/refine"
+    );
+  });
+  await page.getByRole("button", { name: "Generate prompt" }).click();
+  await requestStarted;
+
+  await navigation.getByRole("button", { name: "Search" }).click();
+  await page
+    .getByRole("switch", {
+      name: "Include Design an agent workflow in AI context",
+    })
+    .click();
+  releaseResponse();
+  await staleResponse;
+  await navigation.getByRole("button", { name: "AI" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Generated prompt" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("# Stale result", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Refinement goal" }),
+  ).toHaveValue(goal);
+  await expect(
+    page.getByRole("button", { name: "Generate prompt" }),
+  ).toBeDisabled();
+  expect(page.url()).toBe(committedUrl);
+  expect(pageErrors).toEqual([]);
 });
 
 test("refreshes corpus data without changing a non-search view or URL", async ({
@@ -703,6 +1033,25 @@ test("clears stale cards and announces a failed committed search", async ({
   });
   await expect(fallbackAlert).toHaveAttribute("role", "alert");
 });
+
+async function mockApiEnabledSettings(page: Page) {
+  await page.route("**/api/settings", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        apiEnabled: true,
+        apiKeyEnv: "PROMPTBAR_OPENAI_API_KEY",
+        model: "test-model",
+        embeddingModel: "test-embedding",
+        dbPath: "/test/promptops.sqlite",
+        corpusDir: "/test/corpus",
+        promptopsStateDir: "/test/state",
+        codexAvailable: false,
+      }),
+    });
+  });
+}
 
 function waitForSearch(page: Page, query: string) {
   return page.waitForResponse((response) => {

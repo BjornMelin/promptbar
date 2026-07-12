@@ -38,6 +38,13 @@ import {
 } from "recharts";
 
 import { MessageResponse } from "@/components/ai-elements/message";
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockCopyButton,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from "@/components/ai-elements/code-block";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +95,7 @@ import type {
   EvalRun,
   Facets,
   PromptDetail,
+  RefinementResponse,
   PromptSummary,
   SearchMode,
   SearchResponse,
@@ -147,6 +155,11 @@ export function PromptbarApp() {
   const [evalInput, setEvalInput] = useState("Summarize the intended use.");
   const [evalAssertions, setEvalAssertions] = useState("summary, prompt");
   const [chatInput, setChatInput] = useState("");
+  const [refinementGoal, setRefinementGoal] = useState("");
+  const [refinementResult, setRefinementResult] =
+    useState<RefinementResponse | null>(null);
+  const [refinementError, setRefinementError] = useState("");
+  const [refining, setRefining] = useState(false);
   const [codexTask, setCodexTask] = useState("");
   const [codexOutput, setCodexOutput] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -159,6 +172,8 @@ export function PromptbarApp() {
   const editorValueRef = useRef("");
   const rawVisibleRef = useRef(false);
   const selectionVersionRef = useRef(0);
+  const selectedIdsRef = useRef<string[]>([]);
+  const refinementRequestRef = useRef(0);
   const resultsAbortRef = useRef<AbortController | null>(null);
   const locationVersionRef = useRef(0);
   const viewRef = useRef<View>("dashboard");
@@ -200,39 +215,70 @@ export function PromptbarApp() {
     return controller;
   }, []);
 
-  const selectPrompt = useCallback(async (id: string) => {
-    const current = selectedRef.current;
-    if (
-      current &&
-      editorValueRef.current !==
-        currentEditorSource(current, rawVisibleRef.current)
-    ) {
-      const confirmed = window.confirm("Discard unsaved editor changes?");
-      if (!confirmed) {
+  const updateSelectedIds = useCallback(
+    (update: (current: string[]) => string[]) => {
+      const current = selectedIdsRef.current;
+      const next = update(current);
+      if (
+        next.length === current.length &&
+        next.every((id, index) => id === current[index])
+      ) {
         return;
       }
-    }
-    const selectionVersion = selectionVersionRef.current + 1;
-    selectionVersionRef.current = selectionVersion;
-    try {
-      const data = await getJson<{ prompt: PromptDetail }>(
-        `/api/prompts/${id}`,
-      );
-      if (selectionVersion !== selectionVersionRef.current) {
-        return;
-      }
-      setSelected(data.prompt);
-      setRawVisible(false);
-      setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
-      setSelectedIds((current) =>
-        current.includes(id) ? current : [id, ...current].slice(0, 8),
-      );
-    } catch (error) {
-      if (selectionVersion === selectionVersionRef.current) {
-        toast.error(errorMessage(error, "Unable to open prompt."));
-      }
-    }
+      selectedIdsRef.current = next;
+      refinementRequestRef.current += 1;
+      setRefining(false);
+      setRefinementResult(null);
+      setRefinementError("");
+      setSelectedIds(next);
+    },
+    [],
+  );
+
+  const updateRefinementGoal = useCallback((value: string) => {
+    refinementRequestRef.current += 1;
+    setRefining(false);
+    setRefinementResult(null);
+    setRefinementError("");
+    setRefinementGoal(value);
   }, []);
+
+  const selectPrompt = useCallback(
+    async (id: string) => {
+      const current = selectedRef.current;
+      if (
+        current &&
+        editorValueRef.current !==
+          currentEditorSource(current, rawVisibleRef.current)
+      ) {
+        const confirmed = window.confirm("Discard unsaved editor changes?");
+        if (!confirmed) {
+          return;
+        }
+      }
+      const selectionVersion = selectionVersionRef.current + 1;
+      selectionVersionRef.current = selectionVersion;
+      try {
+        const data = await getJson<{ prompt: PromptDetail }>(
+          `/api/prompts/${id}`,
+        );
+        if (selectionVersion !== selectionVersionRef.current) {
+          return;
+        }
+        setSelected(data.prompt);
+        setRawVisible(false);
+        setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
+        updateSelectedIds((current) =>
+          current.includes(id) ? current : [id, ...current].slice(0, 8),
+        );
+      } catch (error) {
+        if (selectionVersion === selectionVersionRef.current) {
+          toast.error(errorMessage(error, "Unable to open prompt."));
+        }
+      }
+    },
+    [updateSelectedIds],
+  );
 
   const runSearch = useCallback(
     async (
@@ -593,6 +639,45 @@ export function PromptbarApp() {
     }
   }
 
+  async function runRefinement() {
+    const instruction = refinementGoal.trim();
+    const promptIds = [...selectedIdsRef.current];
+    if (
+      !settings?.apiEnabled ||
+      !instruction ||
+      promptIds.length === 0 ||
+      refining
+    ) {
+      return;
+    }
+
+    const requestVersion = refinementRequestRef.current + 1;
+    refinementRequestRef.current = requestVersion;
+    setRefining(true);
+    setRefinementResult(null);
+    setRefinementError("");
+    try {
+      const result = await postJson<RefinementResponse>("/api/refine", {
+        promptIds,
+        instruction,
+      });
+      if (refinementRequestRef.current === requestVersion) {
+        setRefinementResult(result);
+      }
+    } catch (error) {
+      if (refinementRequestRef.current === requestVersion) {
+        setRefinementResult(null);
+        setRefinementError(
+          errorMessage(error, "Unable to refine selected prompts."),
+        );
+      }
+    } finally {
+      if (refinementRequestRef.current === requestVersion) {
+        setRefining(false);
+      }
+    }
+  }
+
   async function runCodex() {
     setBusy(true);
     const result = await postJson<{ ok: boolean; output: string }>(
@@ -782,7 +867,7 @@ export function PromptbarApp() {
                   onSelect={selectPrompt}
                   onToggleFavorite={toggleFavorite}
                   onToggleContext={(id) => {
-                    setSelectedIds((current) =>
+                    updateSelectedIds((current) =>
                       current.includes(id)
                         ? current.filter((item) => item !== id)
                         : [id, ...current].slice(0, 8),
@@ -814,10 +899,16 @@ export function PromptbarApp() {
                   codexTask={codexTask}
                   codexOutput={codexOutput}
                   busy={busy}
+                  refinementGoal={refinementGoal}
+                  refinementResult={refinementResult}
+                  refinementError={refinementError}
+                  refining={refining}
                   onInput={setChatInput}
                   onSend={sendChat}
                   onCodexTask={setCodexTask}
                   onRunCodex={runCodex}
+                  onRefinementGoal={updateRefinementGoal}
+                  onRefine={runRefinement}
                 />
               </TabsContent>
               <TabsContent value="evals" className="m-0 h-full">
@@ -1191,10 +1282,16 @@ function ChatView(props: {
   codexTask: string;
   codexOutput: string;
   busy: boolean;
+  refinementGoal: string;
+  refinementResult: RefinementResponse | null;
+  refinementError: string;
+  refining: boolean;
   onInput: (value: string) => void;
   onSend: () => Promise<void>;
   onCodexTask: (value: string) => void;
   onRunCodex: () => Promise<void>;
+  onRefinementGoal: (value: string) => void;
+  onRefine: () => Promise<void>;
 }) {
   return (
     <div className="grid h-full grid-cols-1 bg-[#f8f6ee] text-[#151611] lg:grid-cols-[320px_minmax(0,1fr)_360px]">
@@ -1220,10 +1317,128 @@ function ChatView(props: {
         <ScrollArea className="min-h-0 border-r border-[#dedacf] p-5">
           <div className="space-y-5">
             {!props.apiEnabled && (
-              <Notice>
-                Add `PROMPTBAR_OPENAI_API_KEY` to `.env.local` for chat.
+              <Notice variant="light">
+                Add `PROMPTBAR_OPENAI_API_KEY` to `.env.local` for refinement
+                and chat.
               </Notice>
             )}
+            <section
+              aria-labelledby="refinement-heading"
+              aria-busy={props.refining}
+              className="space-y-4 rounded-md border border-[#d8d2c3] bg-white p-4 text-[#151611]"
+            >
+              <div>
+                <h2 id="refinement-heading" className="font-semibold">
+                  Refine selected prompts
+                </h2>
+                <p
+                  id="refinement-selection-help"
+                  className="mt-1 text-sm text-[#6f6c62]"
+                >
+                  {props.selectedIds.length === 0
+                    ? "No prompts selected. Select 1-8 prompts in Search."
+                    : `${props.selectedIds.length} of 8 prompts selected.`}
+                </p>
+              </div>
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void props.onRefine();
+                }}
+              >
+                <label
+                  htmlFor="refinement-goal"
+                  className="block text-sm font-medium"
+                >
+                  Refinement goal
+                </label>
+                <Textarea
+                  id="refinement-goal"
+                  value={props.refinementGoal}
+                  onChange={(event) =>
+                    props.onRefinementGoal(event.target.value)
+                  }
+                  aria-describedby="refinement-selection-help"
+                  maxLength={4000}
+                  required
+                  disabled={props.refining}
+                  placeholder="Describe the copy-ready prompt you want"
+                  className="min-h-24 resize-y border-[#d8d2c3] bg-white text-base md:text-sm"
+                />
+                <Button
+                  type="submit"
+                  disabled={
+                    !props.apiEnabled ||
+                    props.selectedIds.length === 0 ||
+                    !props.refinementGoal.trim() ||
+                    props.refining
+                  }
+                  className="bg-[#246bfe] text-white hover:bg-[#1f5bd7]"
+                >
+                  {props.refining && (
+                    <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                  )}
+                  {props.refining ? "Generating..." : "Generate prompt"}
+                </Button>
+              </form>
+              {props.refinementError && (
+                <Notice role="alert" variant="light">
+                  {props.refinementError}
+                </Notice>
+              )}
+              {props.refinementResult && (
+                <div className="space-y-3">
+                  <p role="status" className="text-sm text-[#486014]">
+                    Refinement ready with{" "}
+                    {props.refinementResult.citations.length}{" "}
+                    {props.refinementResult.citations.length === 1
+                      ? "citation"
+                      : "citations"}
+                    .
+                  </p>
+                  <h3 className="font-semibold">Generated prompt</h3>
+                  <CodeBlock
+                    code={props.refinementResult.promptMarkdown}
+                    language="markdown"
+                    className="border-[#d8d2c3]"
+                  >
+                    <CodeBlockHeader>
+                      <CodeBlockTitle>Markdown</CodeBlockTitle>
+                      <CodeBlockActions>
+                        <CodeBlockCopyButton
+                          type="button"
+                          size="sm"
+                          aria-label="Copy prompt"
+                          className="px-3"
+                          onCopy={() => toast.success("Prompt copied.")}
+                          onError={() =>
+                            toast.error(
+                              "Couldn’t copy prompt. Select the displayed Markdown manually.",
+                            )
+                          }
+                        >
+                          Copy prompt
+                        </CodeBlockCopyButton>
+                      </CodeBlockActions>
+                    </CodeBlockHeader>
+                  </CodeBlock>
+                  <div>
+                    <h3 className="font-semibold">Citations</h3>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                      {props.refinementResult.citations.map((citation) => (
+                        <li key={citation.promptId}>
+                          <span className="font-medium">{citation.title}</span>{" "}
+                          <code className="text-xs text-[#6f6c62]">
+                            {citation.promptId}
+                          </code>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </section>
             {props.messages.map((message) => (
               <div
                 key={message.id}
@@ -1582,14 +1797,21 @@ function Meta({ label, value }: { label: string; value: string }) {
 function Notice({
   children,
   role = "status",
+  variant = "dark",
 }: {
   children: React.ReactNode;
   role?: "alert" | "status";
+  variant?: "dark" | "light";
 }) {
   return (
     <div
       role={role}
-      className="rounded-md border border-[#ffb657]/30 bg-[#ffb657]/10 p-3 text-sm text-[#ffcf8a]"
+      className={cn(
+        "rounded-md border p-3 text-sm",
+        variant === "light"
+          ? "border-[#a95e00]/30 bg-[#fff4df] text-[#663800]"
+          : "border-[#ffb657]/30 bg-[#ffb657]/10 text-[#ffcf8a]",
+      )}
     >
       {children}
     </div>
@@ -1767,7 +1989,7 @@ function errorMessage(error: unknown, fallback: string): string {
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readResponseError(response));
   }
   return (await response.json()) as T;
 }
@@ -1779,7 +2001,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readResponseError(response));
   }
   return (await response.json()) as T;
 }
@@ -1791,7 +2013,20 @@ async function patchJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readResponseError(response));
   }
   return (await response.json()) as T;
+}
+
+async function readResponseError(response: Response): Promise<string> {
+  const text = (await response.text()).trim();
+  if (!text) {
+    return "";
+  }
+  try {
+    const payload = JSON.parse(text) as { error?: unknown };
+    return typeof payload.error === "string" ? payload.error.trim() : text;
+  } catch {
+    return text;
+  }
 }

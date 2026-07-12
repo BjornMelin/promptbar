@@ -80,8 +80,9 @@ agent contract for the repo; do not add tool-specific mirror files such as
   unrelated modules.
 - `src/lib/server/import-corpus.ts` is an API adapter to `promptops import`; do
   not rebuild a parallel TypeScript importer.
-- `src/lib/server/ai.ts` owns OpenAI provider creation, chat, and eval
-  execution. Preserve local fallbacks when API generation is disabled.
+- `src/lib/server/ai.ts` owns OpenAI provider creation, chat, cited refinement,
+  and eval execution. Keep refinement redacted and server-cited; preserve local
+  eval fallbacks when API generation is disabled.
 - `src/lib/server/codex.ts` owns the explicit Codex bridge. Keep bridge calls
   bounded, local, and read-only unless the user task explicitly asks for edits.
 - Keep `better-sqlite3`, `@parcel/watcher`, filesystem, child-process, and

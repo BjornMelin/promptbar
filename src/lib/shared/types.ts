@@ -1,6 +1,11 @@
 import type { z } from "zod";
 
-import type { promptStatusSchema, searchModeSchema } from "./schemas";
+import type {
+  promptStatusSchema,
+  refinementRequestSchema,
+  refinementResponseSchema,
+  searchModeSchema,
+} from "./schemas";
 
 export type PromptKind =
   | "codex-raw"
@@ -18,6 +23,12 @@ export type AiMode = "local" | "api" | "codex";
 
 /** Enumerates the supported lexical and embedding-assisted search modes. */
 export type SearchMode = z.infer<typeof searchModeSchema>;
+
+/** Request accepted by the cited prompt-refinement endpoint. */
+export type RefinementRequest = z.infer<typeof refinementRequestSchema>;
+
+/** Generated prompt markdown with citations resolved to Promptbar records. */
+export type RefinementResponse = z.infer<typeof refinementResponseSchema>;
 
 export type PromptSummary = {
   id: string;
