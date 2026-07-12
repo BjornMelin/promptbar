@@ -37,6 +37,19 @@ iteration, and reviewable exports back to the source repository.
 - Without a repo-scoped key, Promptbar remains usable with local FTS search,
   editing, exports, local eval fallback, and explicit Codex bridge status.
 
+## Bundled corpus
+
+Promptbar ships six reusable engineering prompts curated from Prompt Atlas.
+Import them through promptops’ canonical `canon/` lane:
+
+```bash
+bun run db:import "$PWD/corpus"
+```
+
+The root-level [provenance ledger](corpus/prompt-atlas-disposition.json) and
+[MIT license notice](corpus/PROMPT_ATLAS_LICENSE) remain review records and do
+not enter the prompt index.
+
 ## Commands
 
 ```bash

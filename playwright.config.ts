@@ -42,7 +42,7 @@ export default defineConfig({
     env: {
       ...inheritedEnv,
       PROMPTBAR_APP_ROOT: path.join(runtimeRoot, "app"),
-      PROMPTBAR_DEFAULT_IMPORT_ROOT: path.join(runtimeRoot, "imports"),
+      PROMPTBAR_DEFAULT_IMPORT_ROOT: path.resolve("corpus"),
       PROMPTBAR_OPENAI_API_KEY: "",
       PROMPTOPS_STATE_DIR: path.join(runtimeRoot, "promptops", "state"),
       PROMPTOPS_CONFIG_DIR: path.join(runtimeRoot, "promptops", "config"),

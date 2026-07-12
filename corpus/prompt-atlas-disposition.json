@@ -1,0 +1,492 @@
+{
+  "schema": "promptbar.prompt-atlas-disposition.v1",
+  "source": {
+    "repository": "BjornMelin/prompt-atlas",
+    "repositoryUrl": "https://github.com/BjornMelin/prompt-atlas",
+    "commit": "d600b5576dfe26b40d8c9e464da2e0427c2d2c07",
+    "tree": "1e8d4ce9236ed32cdfe5598c4a7785578315663e",
+    "license": {
+      "spdx": "MIT",
+      "sourcePath": "LICENSE",
+      "sourceGitBlob": "8f3b97f7e71b45bf8df16b01d87be57eecd8cbbf",
+      "noticePath": "corpus/PROMPT_ATLAS_LICENSE",
+      "noticeSha256": "6f9ee5dbd6c2f6f36764a7fb26a9c0c2d7cb94a6ee32227f51a5c52d760e7bde"
+    }
+  },
+  "scope": {
+    "included": [
+      ".backup/**",
+      "README.md",
+      "docs/**",
+      "prompts/**",
+      "repository-structure.md",
+      "templates/**"
+    ],
+    "excluded": "Repository operations, automation, contribution metadata, and license metadata are not prompt content assets."
+  },
+  "assetCount": 64,
+  "entries": [
+    {
+      "sourcePath": ".backup/frontend/components.md",
+      "sourceGitBlob": "885b99adc1bd1e5113d78f672e424bba4faef04d",
+      "sourceBytes": 4860,
+      "disposition": "duplicate",
+      "reason": "Byte-identical backup copy of prompts/frontend/components.md.",
+      "duplicateOf": "prompts/frontend/components.md"
+    },
+    {
+      "sourcePath": "README.md",
+      "sourceGitBlob": "37495e25ba2daaf0c04b47f55b9890e389169f47",
+      "sourceBytes": 6846,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "docs/best-practices.md",
+      "sourceGitBlob": "941d9ce41a3aedfb9db4cc8b621cca6b374d4139",
+      "sourceBytes": 4122,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "docs/examples/lambda-image-processor.md",
+      "sourceGitBlob": "f110fbe1c6d22d6d5fb06c2a8a7abe805476c737",
+      "sourceBytes": 4557,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "docs/getting-started.md",
+      "sourceGitBlob": "8b985669f0a04083747fc7669ae5d0218154fdf1",
+      "sourceBytes": 4433,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "prompts/README.md",
+      "sourceGitBlob": "2c954d475c48429ba61ec45d85f24d6dade507fa",
+      "sourceBytes": 2782,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "prompts/ai-agents/agent_development_prompt.md",
+      "sourceGitBlob": "6a8be5d3eb2c42aba2489d20eefecfedf43d745c",
+      "sourceBytes": 18221,
+      "disposition": "curated",
+      "reason": "Curated into a tool-neutral workflow design prompt with explicit termination, permission, and evaluation contracts.",
+      "destinationPath": "corpus/canon/agent-architecture-decision.md",
+      "destinationSha256": "29c3f528b14feb7b5537527ccacb747024764cf66d992edf354d08ab76cd350d"
+    },
+    {
+      "sourcePath": "prompts/backend/api-design.md",
+      "sourceGitBlob": "55876b42166b712eb6e28f26fca16f15cc187d06",
+      "sourceBytes": 3060,
+      "disposition": "curated",
+      "reason": "Curated into a consumer-led API contract prompt with explicit validation, access-control, and compatibility requirements.",
+      "destinationPath": "corpus/canon/api-contract-design.md",
+      "destinationSha256": "f505c9b2d013fb6d6a76e096655037286b467510014c66a0845f23c11af90145"
+    },
+    {
+      "sourcePath": "prompts/backend/api.md",
+      "sourceGitBlob": "22be6f4a3394fca6bd189126de73b16298812c29",
+      "sourceBytes": 4920,
+      "disposition": "superseded",
+      "reason": "A broader generic alternative superseded by the smaller curated canonical prompt."
+    },
+    {
+      "sourcePath": "prompts/backend/database.md",
+      "sourceGitBlob": "c2755aaec2ed26c97f0148e8585dd32649acc92a",
+      "sourceBytes": 4434,
+      "disposition": "curated",
+      "reason": "Curated into a database change prompt centered on invariants, native constraints, access patterns, migration, and recovery.",
+      "destinationPath": "corpus/canon/database-change-plan.md",
+      "destinationSha256": "f9dfb9016e6fe9edb1519ab6aee9be41dbd24f150dc24cffefca27879a38a39b"
+    },
+    {
+      "sourcePath": "prompts/backend/microservices.md",
+      "sourceGitBlob": "7fb07c1885aeabf0b31193d074f1ce2120bb35a7",
+      "sourceBytes": 4803,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cicd/cicd-and-cloud-integration.md",
+      "sourceGitBlob": "648560536ebf842485ff989548074c1e91f81295",
+      "sourceBytes": 976,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/README.md",
+      "sourceGitBlob": "84bb748d0ab61d42038cedb5975e232d1c7823a0",
+      "sourceBytes": 5086,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "prompts/claude-code/branch-management/finalize-merge-branch.md",
+      "sourceGitBlob": "96ecf9db7dc561ed26486ee5bd819ac00f515097",
+      "sourceBytes": 1260,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/branch-management/fix-update-branch.md",
+      "sourceGitBlob": "b72174ca2ee1dab6685929ff7c341884924870dc",
+      "sourceBytes": 1583,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/branch-management/start-branch-review.md",
+      "sourceGitBlob": "d58a9bfba4463ce0cccf7db33dd4b2238e3dafb8",
+      "sourceBytes": 1610,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/code-review-quality/comprehensive-code-review.md",
+      "sourceGitBlob": "b45a4818c4ef5afdbb7ed86431f29d71a1b559bb",
+      "sourceBytes": 5278,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/development-tasks/complete-backend-task.md",
+      "sourceGitBlob": "9548f8cf2763437be89e45451833ebb784cb1e77",
+      "sourceBytes": 3643,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/development-tasks/complete-frontend-task.md",
+      "sourceGitBlob": "9c5a02d82b68e91b9a22f52bdcec0a76bd45196d",
+      "sourceBytes": 3737,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/development-tasks/continue-backend-task.md",
+      "sourceGitBlob": "4f3742a34a6977fd58fbe90b9c7042c12174f0a3",
+      "sourceBytes": 3641,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/development-tasks/phase-implementation.md",
+      "sourceGitBlob": "9da9ed934219ee9442393c05c86d70e7cfa3454b",
+      "sourceBytes": 3578,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/general-guidelines/advanced-implementation-guide.md",
+      "sourceGitBlob": "b68dabd19f992b3180ea5a214a8e4b12d03c4902",
+      "sourceBytes": 6702,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/general-guidelines/general-task-prompt.md",
+      "sourceGitBlob": "2dd56c0c48c1dc38c8815f5cda1bf61255aa6159",
+      "sourceBytes": 6025,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/general-guidelines/implementation-guidelines.md",
+      "sourceGitBlob": "cc74395bea4f559a76c19c0395ec043c48b3fd5a",
+      "sourceBytes": 3909,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/general-guidelines/tripsage-core-prompt.md",
+      "sourceGitBlob": "2dd56c0c48c1dc38c8815f5cda1bf61255aa6159",
+      "sourceBytes": 6025,
+      "disposition": "duplicate",
+      "reason": "Byte-identical project-named copy of prompts/claude-code/general-guidelines/general-task-prompt.md.",
+      "duplicateOf": "prompts/claude-code/general-guidelines/general-task-prompt.md"
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/complete-highest-todo-vect-db.md",
+      "sourceGitBlob": "a1087746c113a2a0384d4a289367e52057c0d0cf",
+      "sourceBytes": 3288,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/complete-highest-todo.md",
+      "sourceGitBlob": "a7ebf543afe393f823f5100af63ab23ba6e4e43d",
+      "sourceBytes": 2455,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/implement-issue.md",
+      "sourceGitBlob": "b1d52d9b968551f234cf5d192924b88536ccc946",
+      "sourceBytes": 6140,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/issue_completion_refactor.md",
+      "sourceGitBlob": "928352c9ae4f0e1750609deefead264a1a07365b",
+      "sourceBytes": 7159,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/iterate-todos.md",
+      "sourceGitBlob": "d9b2f6323bd0e5298b6794a8109411a73b8074c2",
+      "sourceBytes": 2462,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/issue-task-management/resolve-priority-issue.md",
+      "sourceGitBlob": "63d28a55674ab4f7a3015f55a8f673f0ebfb2d32",
+      "sourceBytes": 5816,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/pull-request-management/finalize-merge-pr.md",
+      "sourceGitBlob": "60cf1516f871c26c6aaf525eba062efba4790cb2",
+      "sourceBytes": 1216,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/pull-request-management/fix-update-pr.md",
+      "sourceGitBlob": "af3134b3b600b3250af7cc119ea6a05f6cb854ac",
+      "sourceBytes": 1535,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/claude-code/pull-request-management/start-pr-review.md",
+      "sourceGitBlob": "b67c885e9e8c8538c0544104b01dc3117b755568",
+      "sourceBytes": 1387,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cloud/architecture.md",
+      "sourceGitBlob": "44094c0999442517c8ff6ae2994738dca538d2cc",
+      "sourceBytes": 5975,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cloud/aws-lambda.md",
+      "sourceGitBlob": "390a20aa05a955f740790830f76c47da6d4630d4",
+      "sourceBytes": 4521,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cloud/serverless.md",
+      "sourceGitBlob": "e5731dbd91c04fe5df69fdd307e85999244dd9cb",
+      "sourceBytes": 4577,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/coding-guidelines/CLAUDE.md",
+      "sourceGitBlob": "e41a3d15e16f30866bb1c725eba43dbde0cea71e",
+      "sourceBytes": 3143,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cursor-ai/README.md",
+      "sourceGitBlob": "1e3be5f7c9962b5b02f67b28664126c53ea94184",
+      "sourceBytes": 6949,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "prompts/cursor-ai/git_feature_workflow.mdc",
+      "sourceGitBlob": "1d8e6dac7b6479aa782923ecbb362f4e7233fae3",
+      "sourceBytes": 4553,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cursor-ai/project_config.md",
+      "sourceGitBlob": "3bf7ecd1d410505e8abaf41e27d1468f7acca402",
+      "sourceBytes": 2651,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cursor-ai/system_prompt.md",
+      "sourceGitBlob": "0e109dfd64a7e77d2f351de9576e1483af0931cb",
+      "sourceBytes": 1638,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/cursor-ai/workflow_state.md",
+      "sourceGitBlob": "84dea6be6a29ef8dd61dcbe265be1a193d29117e",
+      "sourceBytes": 3795,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/frontend/components.md",
+      "sourceGitBlob": "885b99adc1bd1e5113d78f672e424bba4faef04d",
+      "sourceBytes": 4860,
+      "disposition": "superseded",
+      "reason": "A broader generic alternative superseded by the smaller curated canonical prompt."
+    },
+    {
+      "sourcePath": "prompts/frontend/performance.md",
+      "sourceGitBlob": "b391c8d180e243e26d1d7c687a7bb275c89ffff5",
+      "sourceBytes": 4140,
+      "disposition": "curated",
+      "reason": "Curated into an evidence-first web performance diagnosis prompt with comparable before-and-after measurement.",
+      "destinationPath": "corpus/canon/web-performance-diagnosis.md",
+      "destinationSha256": "e9f290a3040b9f6bbcd568b0a0a3c9ef55efb1e5cac3383c1f404ca033e38fd6"
+    },
+    {
+      "sourcePath": "prompts/frontend/react-components.md",
+      "sourceGitBlob": "b071f46d3a6eb224eefa85211012f3120dcd2bda",
+      "sourceBytes": 2786,
+      "disposition": "curated",
+      "reason": "Curated into a repository-aware React delivery prompt that prioritizes native semantics, existing primitives, and behavior tests.",
+      "destinationPath": "corpus/canon/react-component-delivery.md",
+      "destinationSha256": "95804ab67cc7eeecc58a880a73450cdf8f974d74b6793059d0c02d4acf65c3ca"
+    },
+    {
+      "sourcePath": "prompts/frontend/react.md",
+      "sourceGitBlob": "8f2378f7666e61c1fd5d3b5883972bd4ebd1e197",
+      "sourceBytes": 4683,
+      "disposition": "superseded",
+      "reason": "A broader generic alternative superseded by the smaller curated canonical prompt."
+    },
+    {
+      "sourcePath": "prompts/github-copilot/instructions/chat-agent-mcp-code-instruct-py_2025_05_02.json",
+      "sourceGitBlob": "1a32584ab07cec44a099dcde2200c8ad4ffa439a",
+      "sourceBytes": 4758,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/github-copilot/instructions/chat-codegen-instruct-py_2025_03_13.json",
+      "sourceGitBlob": "31175deb0e6c4a740949851c73a3f1a08748e28b",
+      "sourceBytes": 6149,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/mcp-servers/mcp-agent-template.prompt.md",
+      "sourceGitBlob": "b193bc9cc9c4d4a08d68caa8eeb01c72278d173c",
+      "sourceBytes": 15680,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/mobile/flutter.md",
+      "sourceGitBlob": "bdec2c3164d4bdd91878b4506ea43647ec2359a7",
+      "sourceBytes": 4450,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/mobile/native.md",
+      "sourceGitBlob": "b4d613c70a7240d4713e70c499a474ab3d492e96",
+      "sourceBytes": 5191,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/mobile/react-native.md",
+      "sourceGitBlob": "6509e466b85d07c448f53728abc68eac8451ecb8",
+      "sourceBytes": 4588,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/prompt-engineering/master-prompt-generator",
+      "sourceGitBlob": "cc353c8c68ab113161a98017e4dd771bdbe7f424",
+      "sourceBytes": 5532,
+      "disposition": "curated",
+      "reason": "Curated into a concise prompt-refinement contract without personas, hidden-reasoning requests, or fixed tools.",
+      "destinationPath": "corpus/canon/prompt-refinement.md",
+      "destinationSha256": "331ce37c68193a5a0dfb806e06b94c50fc6eb1ed728ae6701a9f0ed3cdc4c3ce"
+    },
+    {
+      "sourcePath": "prompts/prompt-engineering/master-prompt-generator.md",
+      "sourceGitBlob": "e0b9a30c271d61b15fefe7a5248e21234dc37088",
+      "sourceBytes": 7620,
+      "disposition": "malformed",
+      "reason": "The Markdown asset contains base64-encoded text instead of importable Markdown."
+    },
+    {
+      "sourcePath": "prompts/prompt-engineering/master-prompt-generator.xml",
+      "sourceGitBlob": "995b8a72c64dc2b950b666da166ce3c62fd83480",
+      "sourceBytes": 5607,
+      "disposition": "alternate-format",
+      "reason": "Alternate XML-like rendering of the prompt generator; it is not well-formed XML and is not the canonical source."
+    },
+    {
+      "sourcePath": "prompts/python/python-ai-ml-expert.md",
+      "sourceGitBlob": "6865c12b65a83a02c1f6372b76bfe3904dbd20de",
+      "sourceBytes": 5099,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/python/python-expert.md",
+      "sourceGitBlob": "16cef9a3b3688bda7e678cbc6f65a3c849e1cded",
+      "sourceBytes": 3387,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/python/python-simple-optimal-code-prompt.md",
+      "sourceGitBlob": "4ed312ee23dc8589c63d6d1e2308495573a2f505",
+      "sourceBytes": 2829,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/python/seasoned-expert-python-ai-ml-swe.md",
+      "sourceGitBlob": "29ae3adcb29dc1124cdf29be979ec01a44b4f5d1",
+      "sourceBytes": 6637,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "prompts/typescript/nextjs-expert-dev.md",
+      "sourceGitBlob": "2c84fffa748a9844e187a23d0da91ce449af5c10",
+      "sourceBytes": 3978,
+      "disposition": "out-of-scope",
+      "reason": "Tool-, platform-, language-, project-, or workflow-specific asset outside the reusable canonical corpus."
+    },
+    {
+      "sourcePath": "repository-structure.md",
+      "sourceGitBlob": "b3bde757d522571718ac6a44303f26ee06550ec6",
+      "sourceBytes": 9186,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "templates/github/README.md",
+      "sourceGitBlob": "5e544d9bff3f6ed57009d73095b8abbb85d5e622",
+      "sourceBytes": 2341,
+      "disposition": "documentation-only",
+      "reason": "Repository guidance, source documentation, or an example; retained for provenance rather than prompt import."
+    },
+    {
+      "sourcePath": "templates/prompt-templates/standard-prompt.md",
+      "sourceGitBlob": "c0f3e0bb2f12e7a0ada33fb81988e70739966067",
+      "sourceBytes": 1151,
+      "disposition": "superseded",
+      "reason": "A broader generic alternative superseded by the smaller curated canonical prompt."
+    }
+  ]
+}
