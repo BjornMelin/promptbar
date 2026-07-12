@@ -164,8 +164,8 @@ export function searchDocuments(input: {
     args.push(input.status);
   }
   if (input.tag) {
-    where.push("d.tags_json LIKE ?");
-    args.push(`%"${input.tag}"%`);
+    where.push(jsonArrayContains("d.tags_json"));
+    args.push(input.tag);
   }
 
   const query = input.query.trim();
@@ -318,7 +318,9 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
   if (!tags.length) {
     return [];
   }
-  const clauses = tags.map(() => "tags_json LIKE ?").join(" OR ");
+  const clauses = tags
+    .map(() => jsonArrayContains("documents.tags_json"))
+    .join(" OR ");
   return (
     db()
       .prepare(
@@ -329,7 +331,7 @@ function relatedPrompts(prompt: PromptSummary): PromptSummary[] {
       LIMIT 6
       `,
       )
-      .all(prompt.id, ...tags.map((tag) => `%"${tag}"%`)) as Row[]
+      .all(prompt.id, ...tags) as Row[]
   ).map(summaryFromRow);
 }
 
@@ -408,6 +410,11 @@ function parseList(value: unknown): string[] {
   } catch {
     return [];
   }
+}
+
+function jsonArrayContains(column: string): string {
+  const jsonArray = `CASE WHEN json_valid(${column}) THEN CASE WHEN json_type(${column}) = 'array' THEN ${column} ELSE '[]' END ELSE '[]' END`;
+  return `EXISTS (SELECT 1 FROM json_each(${jsonArray}) AS item WHERE item.value = ?)`;
 }
 
 function parseObject(value: unknown): Record<string, unknown> {

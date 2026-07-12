@@ -243,8 +243,8 @@ impl Store {
             args.push(Box::new(status.clone()));
         }
         if let Some(tag) = &input.tag {
-            where_sql.push("d.tags_json LIKE ?".to_string());
-            args.push(Box::new(format!("%\"{tag}\"%")));
+            where_sql.push(json_array_contains("d.tags_json"));
+            args.push(Box::new(tag.clone()));
         }
         if let Some(risk) = &input.risk {
             where_sql.push("d.risk_flags_json LIKE ?".to_string());
@@ -964,8 +964,8 @@ fn related(conn: &Connection, prompt: &PromptSummary) -> Result<Vec<PromptSummar
     let mut where_sql = Vec::new();
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(prompt.id.clone())];
     for tag in tags {
-        where_sql.push("tags_json LIKE ?".to_string());
-        args.push(Box::new(format!("%\"{tag}\"%")));
+        where_sql.push(json_array_contains("documents.tags_json"));
+        args.push(Box::new(tag));
     }
     let sql = format!(
         "SELECT *, 0.0 AS score FROM documents WHERE id != ? AND ({}) ORDER BY updated_at DESC LIMIT 6",
@@ -1003,6 +1003,12 @@ fn excerpt(content: &str) -> String {
 
 fn parse_list(value: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(value).unwrap_or_default()
+}
+
+fn json_array_contains(column: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid({column}) THEN CASE WHEN json_type({column}) = 'array' THEN {column} ELSE '[]' END ELSE '[]' END) AS item WHERE item.value = ?)"
+    )
 }
 
 fn to_json(value: &[String]) -> Result<String> {
@@ -1108,6 +1114,102 @@ mod tests {
         let chunks = chunk_content("a\n\nb\n\nc");
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0], "a\n\nb\n\nc");
+    }
+
+    #[test]
+    fn tag_search_matches_exact_json_members() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = StatePaths {
+            state_root: temp.path().join("state"),
+            config_root: temp.path().join("config"),
+            cache_root: temp.path().join("cache"),
+            db_path: temp.path().join("state/promptops.sqlite"),
+            raw_dir: temp.path().join("state/raw"),
+            audit_log: temp.path().join("state/audit.jsonl"),
+            config_file: temp.path().join("config/config.toml"),
+        };
+        let store = Store::open(paths).expect("store");
+        for (id, tag) in [
+            ("percent", "100%"),
+            ("percent-lookalike", "100x"),
+            ("underscore", "a_b"),
+            ("underscore-lookalike", "axb"),
+            ("quote", "a\"b"),
+            ("all", "all"),
+            ("padded", " agent "),
+            ("object", "object-placeholder"),
+        ] {
+            store
+                .upsert_document(DocumentInput {
+                    id: id.to_string(),
+                    title: id.to_string(),
+                    kind: "canon".to_string(),
+                    status: "inbox".to_string(),
+                    favorite: false,
+                    tags: vec![tag.to_string()],
+                    risk_flags: Vec::new(),
+                    source_type: "test".to_string(),
+                    source_path: format!("{id}.md"),
+                    source_record_id: None,
+                    corpus_root: None,
+                    corpus_path: format!("canon/{id}.md"),
+                    content: format!("# {id}"),
+                    frontmatter: json!({}),
+                    imported_at: now_iso(),
+                })
+                .expect("document");
+        }
+        store
+            .connect()
+            .expect("connection")
+            .execute(
+                "UPDATE documents SET tags_json = 'not-json' WHERE id = 'percent-lookalike'",
+                [],
+            )
+            .expect("malformed legacy row");
+        let conn = store.connect().expect("connection");
+        conn.execute(
+            "UPDATE documents SET tags_json = '\"all\"' WHERE id = 'underscore-lookalike'",
+            [],
+        )
+        .expect("scalar legacy row");
+        conn.execute(
+            "UPDATE documents SET tags_json = '{\"tag\":\"all\"}' WHERE id = 'object'",
+            [],
+        )
+        .expect("object legacy row");
+
+        for (tag, expected_id) in [
+            ("100%", "percent"),
+            ("a_b", "underscore"),
+            ("a\"b", "quote"),
+            ("all", "all"),
+            (" agent ", "padded"),
+        ] {
+            let results = store
+                .search_lexical(&SearchRequest {
+                    query: String::new(),
+                    mode: SearchMode::Lexical,
+                    kind: None,
+                    status: None,
+                    tag: Some(tag.to_string()),
+                    risk: None,
+                    limit: 10,
+                })
+                .expect("tag search");
+            assert_eq!(
+                results
+                    .iter()
+                    .map(|prompt| prompt.id.as_str())
+                    .collect::<Vec<_>>(),
+                vec![expected_id],
+            );
+        }
+        let detail = store
+            .get_prompt("all")
+            .expect("prompt query")
+            .expect("prompt");
+        assert!(detail.related.is_empty());
     }
 
     #[test]
