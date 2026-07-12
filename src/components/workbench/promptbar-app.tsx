@@ -12,6 +12,7 @@ import {
   Gauge,
   GitBranch,
   LayoutDashboard,
+  Link2,
   Loader2,
   Play,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -46,7 +48,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -54,6 +61,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -67,6 +75,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DEFAULT_SEARCH_URL_STATE,
+  parseSearchUrl,
+  serializeSearchUrl,
+  type SearchUrlState,
+} from "@/lib/shared/search-url";
 import { cn } from "@/lib/utils";
 import type {
   AppSettings,
@@ -86,6 +100,15 @@ type BootstrapResponse = {
   importReport: unknown;
 };
 
+type CorpusResponse = {
+  stats: CorpusStats;
+  facets: Facets;
+  recent: PromptSummary[];
+  evalRuns: EvalRun[];
+};
+
+type SearchHistoryMode = "none" | "push" | "replace";
+
 type View = "dashboard" | "search" | "editor" | "chat" | "evals";
 
 const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
@@ -96,12 +119,22 @@ const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "evals", label: "Evals", icon: BarChart3 },
 ];
 
+const ALL_FILTER_OPTION = "all";
+const FACET_FILTER_PREFIX = "facet:";
+
 export function PromptbarApp() {
-  const [view, setView] = useState<View>("dashboard");
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<SearchMode>("lexical");
-  const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [view, setViewState] = useState<View>("dashboard");
+  const [query, setQuery] = useState(DEFAULT_SEARCH_URL_STATE.query);
+  const [mode, setMode] = useState<SearchMode>(DEFAULT_SEARCH_URL_STATE.mode);
+  const [kind, setKind] = useState<SearchUrlState["kind"]>(
+    DEFAULT_SEARCH_URL_STATE.kind,
+  );
+  const [status, setStatus] = useState<SearchUrlState["status"]>(
+    DEFAULT_SEARCH_URL_STATE.status,
+  );
+  const [tag, setTag] = useState<SearchUrlState["tag"]>(
+    DEFAULT_SEARCH_URL_STATE.tag,
+  );
   const [stats, setStats] = useState<CorpusStats | null>(null);
   const [facets, setFacets] = useState<Facets | null>(null);
   const [results, setResults] = useState<PromptSummary[]>([]);
@@ -121,10 +154,19 @@ export function PromptbarApp() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [searchError, setSearchError] = useState("");
   const selectedRef = useRef<PromptDetail | null>(null);
   const editorValueRef = useRef("");
   const rawVisibleRef = useRef(false);
   const selectionVersionRef = useRef(0);
+  const resultsAbortRef = useRef<AbortController | null>(null);
+  const locationVersionRef = useRef(0);
+  const viewRef = useRef<View>("dashboard");
+
+  const setView = useCallback((nextView: View) => {
+    viewRef.current = nextView;
+    setViewState(nextView);
+  }, []);
 
   const chatTransport = useMemo(
     () =>
@@ -142,6 +184,22 @@ export function PromptbarApp() {
     rawVisibleRef.current = rawVisible;
   }, [editorValue, rawVisible, selected]);
 
+  const applySearchState = useCallback((state: SearchUrlState) => {
+    setQuery(state.query);
+    setMode(state.mode);
+    setKind(state.kind);
+    setStatus(state.status);
+    setTag(state.tag);
+  }, []);
+
+  const beginResultsLoad = useCallback(() => {
+    resultsAbortRef.current?.abort();
+    const controller = new AbortController();
+    resultsAbortRef.current = controller;
+    selectionVersionRef.current += 1;
+    return controller;
+  }, []);
+
   const selectPrompt = useCallback(async (id: string) => {
     const current = selectedRef.current;
     if (
@@ -156,39 +214,157 @@ export function PromptbarApp() {
     }
     const selectionVersion = selectionVersionRef.current + 1;
     selectionVersionRef.current = selectionVersion;
-    const data = await getJson<{ prompt: PromptDetail }>(`/api/prompts/${id}`);
-    if (selectionVersion !== selectionVersionRef.current) {
-      return;
+    try {
+      const data = await getJson<{ prompt: PromptDetail }>(
+        `/api/prompts/${id}`,
+      );
+      if (selectionVersion !== selectionVersionRef.current) {
+        return;
+      }
+      setSelected(data.prompt);
+      setRawVisible(false);
+      setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
+      setSelectedIds((current) =>
+        current.includes(id) ? current : [id, ...current].slice(0, 8),
+      );
+    } catch (error) {
+      if (selectionVersion === selectionVersionRef.current) {
+        toast.error(errorMessage(error, "Unable to open prompt."));
+      }
     }
-    setSelected(data.prompt);
-    setRawVisible(false);
-    setEditorValue(data.prompt.redactedContent ?? data.prompt.content);
-    setSelectedIds((current) =>
-      current.includes(id) ? current : [id, ...current].slice(0, 8),
-    );
   }, []);
 
-  const refreshSearch = useCallback(async () => {
-    const params = new URLSearchParams({
-      q: query,
-      mode,
-      limit: "40",
-    });
-    if (kind !== "all") {
-      params.set("kind", kind);
-    }
-    if (status !== "all") {
-      params.set("status", status);
-    }
-    const data = await getJson<SearchResponse>(`/api/search?${params}`);
-    setResults(data.results);
-    setStats(data.stats);
-    setFacets(data.facets);
-    setNotice(data.hybridReason);
-    if (!selected && data.results[0]) {
-      await selectPrompt(data.results[0].id);
-    }
-  }, [kind, mode, query, selectPrompt, selected, status]);
+  const runSearch = useCallback(
+    async (
+      nextState: SearchUrlState,
+      historyMode: SearchHistoryMode,
+      announceRefreshError = false,
+    ) => {
+      const controller = beginResultsLoad();
+      setSearchError("");
+      if (historyMode !== "none") {
+        applySearchState(nextState);
+        setView("search");
+        setResults([]);
+        setNotice("");
+        writeSearchHistory(nextState, historyMode);
+      }
+
+      const params = new URLSearchParams({
+        q: nextState.query,
+        mode: nextState.mode,
+        limit: "40",
+      });
+      if (nextState.kind !== null) {
+        params.set("kind", nextState.kind);
+      }
+      if (nextState.status !== null) {
+        params.set("status", nextState.status);
+      }
+      if (nextState.tag !== null) {
+        params.set("tag", nextState.tag);
+      }
+
+      try {
+        const data = await getJson<SearchResponse>(`/api/search?${params}`, {
+          signal: controller.signal,
+        });
+        if (
+          controller.signal.aborted ||
+          resultsAbortRef.current !== controller
+        ) {
+          return;
+        }
+        setResults(data.results);
+        setStats(data.stats);
+        setFacets(data.facets);
+        setNotice(data.hybridReason);
+        setSearchError("");
+        if (!selectedRef.current && data.results[0]) {
+          await selectPrompt(data.results[0].id);
+        }
+      } catch (error) {
+        if (
+          !controller.signal.aborted &&
+          resultsAbortRef.current === controller &&
+          !isAbortError(error)
+        ) {
+          setResults([]);
+          setNotice("");
+          const message = errorMessage(error, "Unable to search corpus.");
+          setSearchError(message);
+          if (announceRefreshError && viewRef.current !== "search") {
+            toast.error(message);
+          }
+        }
+      } finally {
+        if (resultsAbortRef.current === controller) {
+          resultsAbortRef.current = null;
+        }
+      }
+    },
+    [applySearchState, beginResultsLoad, selectPrompt, setView],
+  );
+
+  const loadCorpusResults = useCallback(
+    async (seed?: CorpusResponse, announceRefreshError = false) => {
+      const controller = beginResultsLoad();
+      setNotice("");
+      setSearchError("");
+
+      try {
+        const data =
+          seed ??
+          (await getJson<CorpusResponse>("/api/corpus", {
+            signal: controller.signal,
+          }));
+        if (
+          controller.signal.aborted ||
+          resultsAbortRef.current !== controller
+        ) {
+          return;
+        }
+        setResults(data.recent);
+        setStats(data.stats);
+        setFacets(data.facets);
+        setEvalRuns(data.evalRuns);
+        if (!selectedRef.current && data.recent[0]) {
+          await selectPrompt(data.recent[0].id);
+        }
+      } catch (error) {
+        if (
+          !controller.signal.aborted &&
+          resultsAbortRef.current === controller &&
+          !isAbortError(error)
+        ) {
+          const message = errorMessage(error, "Unable to open corpus.");
+          setNotice(message);
+          if (
+            announceRefreshError &&
+            viewRef.current !== "dashboard" &&
+            viewRef.current !== "search"
+          ) {
+            toast.error(message);
+          }
+        }
+      } finally {
+        if (resultsAbortRef.current === controller) {
+          resultsAbortRef.current = null;
+        }
+      }
+    },
+    [beginResultsLoad, selectPrompt],
+  );
+
+  const restoreDashboard = useCallback(
+    (seed?: CorpusResponse) => {
+      applySearchState(DEFAULT_SEARCH_URL_STATE);
+      setView("dashboard");
+      setResults([]);
+      return loadCorpusResults(seed, true);
+    },
+    [applySearchState, loadCorpusResults, setView],
+  );
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
@@ -200,28 +376,101 @@ export function PromptbarApp() {
       setStats(boot.stats);
       setFacets(boot.facets);
       setSettings(appSettings);
-      const corpus = await getJson<{
-        recent: PromptSummary[];
-        evalRuns: EvalRun[];
-      }>("/api/corpus");
-      setResults(corpus.recent);
+      const locationVersion = locationVersionRef.current;
+      const sharedSearch = parseSearchUrl(window.location.search);
+      const searchPromise = sharedSearch
+        ? runSearch(sharedSearch, "replace")
+        : null;
+      const corpus = await getJson<CorpusResponse>("/api/corpus");
       setEvalRuns(corpus.evalRuns);
-      if (corpus.recent[0]) {
-        await selectPrompt(corpus.recent[0].id);
+      if (locationVersion !== locationVersionRef.current) {
+        await searchPromise;
+        return;
+      }
+      if (searchPromise) {
+        await searchPromise;
+      } else {
+        await restoreDashboard(corpus);
       }
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "Unable to open corpus.",
-      );
+      setNotice(errorMessage(error, "Unable to open corpus."));
     } finally {
       setLoading(false);
     }
-  }, [selectPrompt]);
+  }, [restoreDashboard, runSearch]);
 
   useEffect(() => {
     const id = window.setTimeout(() => void bootstrap(), 0);
     return () => window.clearTimeout(id);
   }, [bootstrap]);
+
+  useEffect(() => {
+    const restoreLocation = () => {
+      locationVersionRef.current += 1;
+      const sharedSearch = parseSearchUrl(window.location.search);
+      if (sharedSearch) {
+        void runSearch(sharedSearch, "replace");
+      } else {
+        void restoreDashboard();
+      }
+    };
+    window.addEventListener("popstate", restoreLocation);
+    return () => window.removeEventListener("popstate", restoreLocation);
+  }, [restoreDashboard, runSearch]);
+
+  useEffect(() => () => resultsAbortRef.current?.abort(), []);
+
+  const draftSearch = useMemo<SearchUrlState>(
+    () => ({ query, mode, kind, status, tag }),
+    [kind, mode, query, status, tag],
+  );
+
+  const executeSearch = useCallback(
+    () => runSearch(draftSearch, "push", true),
+    [draftSearch, runSearch],
+  );
+
+  const refreshCurrentResults = useCallback(() => {
+    const committedSearch = parseSearchUrl(window.location.search);
+    return viewRef.current !== "dashboard" && committedSearch
+      ? runSearch(committedSearch, "none", true)
+      : loadCorpusResults(undefined, true);
+  }, [loadCorpusResults, runSearch]);
+
+  const refreshFromCommand = useCallback(() => {
+    return viewRef.current === "search"
+      ? executeSearch()
+      : refreshCurrentResults();
+  }, [executeSearch, refreshCurrentResults]);
+
+  const navigateView = useCallback(
+    (nextView: View) => {
+      if (nextView !== "dashboard" || !parseSearchUrl(window.location.search)) {
+        setView(nextView);
+        return;
+      }
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.hash}`,
+      );
+      void restoreDashboard();
+    },
+    [restoreDashboard, setView],
+  );
+
+  const copySearchLink = useCallback(async () => {
+    writeSearchHistory(searchStateFromLocation(), "replace");
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API unavailable");
+      }
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Search link copied.");
+    } catch {
+      toast.error("Couldn’t copy link. Copy it from the address bar.");
+    }
+  }, []);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -250,7 +499,7 @@ export function PromptbarApp() {
       );
       setSelected(data.prompt);
       setEditorValue(data.prompt.rawContent ?? editorValue);
-      await refreshSearch();
+      await refreshCurrentResults();
     } finally {
       setBusy(false);
     }
@@ -297,7 +546,7 @@ export function PromptbarApp() {
         setEditorValue(currentEditorSource(data.prompt, false));
       }
     }
-    await refreshSearch();
+    await refreshCurrentResults();
   }
 
   async function runEval() {
@@ -332,11 +581,16 @@ export function PromptbarApp() {
       return;
     }
     setBusy(true);
-    const data = await postJson<{ filePath: string }>("/api/export", {
-      promptIds: selectedIds,
-    });
-    setNotice(`Exported ${selectedIds.length} prompts to ${data.filePath}`);
-    setBusy(false);
+    try {
+      const data = await postJson<{ filePath: string }>("/api/export", {
+        promptIds: selectedIds,
+      });
+      setNotice(`Exported ${selectedIds.length} prompts to ${data.filePath}`);
+    } catch (error) {
+      toast.error(errorMessage(error, "Unable to export prompts."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runCodex() {
@@ -396,7 +650,7 @@ export function PromptbarApp() {
                   size="icon"
                   variant="ghost"
                   aria-label={item.label}
-                  onClick={() => setView(item.id)}
+                  onClick={() => navigateView(item.id)}
                   className={cn(
                     "size-10 text-[#aaa69a] hover:bg-white/8 hover:text-white",
                     view === item.id &&
@@ -448,38 +702,41 @@ export function PromptbarApp() {
             <div className="order-3 flex min-w-0 basis-full items-center gap-2 rounded-md border border-white/10 bg-[#0d0e0b] px-3 py-2 sm:order-none sm:flex-1 sm:basis-auto">
               <Search className="size-4 text-[#aaa69a]" />
               <Input
+                aria-label="Search corpus"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    void refreshSearch();
-                    setView("search");
+                    void executeSearch();
                   }
                 }}
                 placeholder="Search corpus"
-                className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                className="h-8 border-0 bg-transparent px-0 text-base shadow-none md:text-sm"
               />
               <Select
                 value={mode}
                 onValueChange={(value) => setMode(value as SearchMode)}
               >
-                <SelectTrigger className="h-8 w-24 border-white/10 bg-white/5 sm:w-28">
+                <SelectTrigger
+                  aria-label="Search mode"
+                  className="h-8 w-24 border-white/10 bg-white/5 sm:w-28"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="lexical">FTS</SelectItem>
-                  <SelectItem value="hybrid">Hybrid</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="lexical">FTS</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
             <Button
-              onClick={() => {
-                void refreshSearch();
-                setView("search");
-              }}
+              aria-label="Search"
+              onClick={() => void executeSearch()}
               className="bg-[#d1ff3c] text-[#151611] hover:bg-[#c3ef35]"
             >
-              <Search className="size-4" />
+              <Search data-icon="inline-start" />
               <span className="hidden sm:inline">Search</span>
             </Button>
           </header>
@@ -487,7 +744,7 @@ export function PromptbarApp() {
           <div className="min-h-0 overflow-hidden">
             <Tabs
               value={view}
-              onValueChange={(value) => setView(value as View)}
+              onValueChange={(value) => navigateView(value as View)}
               className="h-full"
             >
               <TabsList className="sr-only">
@@ -510,13 +767,18 @@ export function PromptbarApp() {
                 <SearchView
                   kind={kind}
                   status={status}
+                  tag={tag}
+                  notice={searchError || notice}
+                  noticeIsError={Boolean(searchError)}
                   facets={facets}
                   results={results}
                   selectedId={selected?.id}
                   selectedIds={selectedIds}
                   onKind={setKind}
                   onStatus={setStatus}
-                  onRefresh={refreshSearch}
+                  onTag={setTag}
+                  onRefresh={executeSearch}
+                  onCopy={copySearchLink}
                   onSelect={selectPrompt}
                   onToggleFavorite={toggleFavorite}
                   onToggleContext={(id) => {
@@ -577,8 +839,8 @@ export function PromptbarApp() {
       <CommandDialog
         open={commandOpen}
         onOpen={setCommandOpen}
-        onView={setView}
-        onRefresh={refreshSearch}
+        onView={navigateView}
+        onRefresh={refreshFromCommand}
         onExport={exportSelected}
       />
       <SettingsSheet
@@ -692,15 +954,20 @@ function currentEditorSource(
 }
 
 function SearchView(props: {
-  kind: string;
-  status: string;
+  kind: SearchUrlState["kind"];
+  status: SearchUrlState["status"];
+  tag: SearchUrlState["tag"];
+  notice: string;
+  noticeIsError: boolean;
   facets: Facets | null;
   results: PromptSummary[];
   selectedId: string | undefined;
   selectedIds: string[];
-  onKind: (value: string) => void;
-  onStatus: (value: string) => void;
+  onKind: (value: string | null) => void;
+  onStatus: (value: SearchUrlState["status"]) => void;
+  onTag: (value: string | null) => void;
   onRefresh: () => Promise<void>;
+  onCopy: () => Promise<void>;
   onSelect: (id: string) => Promise<void>;
   onToggleFavorite: (prompt: PromptSummary) => Promise<void>;
   onToggleContext: (id: string) => void;
@@ -719,17 +986,37 @@ function SearchView(props: {
             label="Status"
             value={props.status}
             values={props.facets?.statuses ?? []}
-            onChange={props.onStatus}
+            onChange={(value) =>
+              props.onStatus(value as SearchUrlState["status"])
+            }
+          />
+          <FilterSelect
+            label="Tag"
+            value={props.tag}
+            values={props.facets?.tags ?? []}
+            onChange={props.onTag}
           />
           <Button
             onClick={() => void props.onRefresh()}
             className="w-full bg-[#d1ff3c] text-[#151611]"
           >
-            <RefreshCw className="size-4" />
+            <RefreshCw data-icon="inline-start" />
             Refresh
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => void props.onCopy()}
+            className="w-full border-white/10 bg-transparent"
+          >
+            <Link2 data-icon="inline-start" />
+            Copy link
+          </Button>
+          {props.notice ? (
+            <Notice role={props.noticeIsError ? "alert" : "status"}>
+              {props.notice}
+            </Notice>
+          ) : null}
           <Separator className="bg-white/10" />
-          <FacetCloud title="Tags" values={props.facets?.tags ?? []} />
           <FacetCloud title="Risk" values={props.facets?.risks ?? []} />
         </div>
       </aside>
@@ -758,6 +1045,7 @@ function SearchView(props: {
                     }}
                   />
                   <Switch
+                    aria-label={`Include ${prompt.title} in AI context`}
                     checked={props.selectedIds.includes(prompt.id)}
                     onClick={(event) => event.stopPropagation()}
                     onCheckedChange={() => props.onToggleContext(prompt.id)}
@@ -1198,26 +1486,42 @@ function PromptRows({
 
 function FilterSelect(props: {
   label: string;
-  value: string;
+  value: string | null;
   values: Array<{ value: string; count: number }>;
-  onChange: (value: string) => void;
+  onChange: (value: string | null) => void;
 }) {
+  const values =
+    props.value !== null &&
+    !props.values.some((item) => item.value === props.value)
+      ? [{ value: props.value, count: 0 }, ...props.values]
+      : props.values;
   return (
     <div>
       <div className="mb-2 text-xs uppercase tracking-[0.14em] text-[#aaa69a]">
         {props.label}
       </div>
-      <Select value={props.value} onValueChange={props.onChange}>
-        <SelectTrigger className="border-white/10 bg-[#0d0e0b]">
+      <Select
+        value={encodeFilterOption(props.value)}
+        onValueChange={(value) => props.onChange(decodeFilterOption(value))}
+      >
+        <SelectTrigger
+          aria-label={props.label}
+          className="border-white/10 bg-[#0d0e0b]"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All</SelectItem>
-          {props.values.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.value} · {item.count}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectItem value={ALL_FILTER_OPTION}>All</SelectItem>
+            {values.map((item) => (
+              <SelectItem
+                key={item.value}
+                value={encodeFilterOption(item.value)}
+              >
+                {item.value} · {item.count}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </div>
@@ -1275,9 +1579,18 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Notice({ children }: { children: React.ReactNode }) {
+function Notice({
+  children,
+  role = "status",
+}: {
+  children: React.ReactNode;
+  role?: "alert" | "status";
+}) {
   return (
-    <div className="rounded-md border border-[#ffb657]/30 bg-[#ffb657]/10 p-3 text-sm text-[#ffcf8a]">
+    <div
+      role={role}
+      className="rounded-md border border-[#ffb657]/30 bg-[#ffb657]/10 p-3 text-sm text-[#ffcf8a]"
+    >
       {children}
     </div>
   );
@@ -1302,6 +1615,9 @@ function CommandDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpen}>
       <DialogContent className="border-white/10 bg-[#151611] p-0 text-[#f8f6ee]">
         <DialogTitle className="sr-only">Command</DialogTitle>
+        <DialogDescription className="sr-only">
+          Navigate Promptbar or run a workbench action.
+        </DialogDescription>
         <Command className="bg-transparent">
           <CommandInput placeholder="Command" />
           <CommandList>
@@ -1321,11 +1637,21 @@ function CommandDialog(props: {
               ))}
             </CommandGroup>
             <CommandGroup heading="Actions">
-              <CommandItem onSelect={() => void props.onRefresh()}>
+              <CommandItem
+                onSelect={() => {
+                  props.onOpen(false);
+                  void props.onRefresh();
+                }}
+              >
                 <RefreshCw className="size-4" />
                 Refresh index
               </CommandItem>
-              <CommandItem onSelect={() => void props.onExport()}>
+              <CommandItem
+                onSelect={() => {
+                  props.onOpen(false);
+                  void props.onExport();
+                }}
+              >
                 <Download className="size-4" />
                 Export context
               </CommandItem>
@@ -1399,8 +1725,47 @@ function coverage(value = 0, total = 0): number {
   return Math.round((value / total) * 100);
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+function writeSearchHistory(
+  state: SearchUrlState,
+  mode: Exclude<SearchHistoryMode, "none">,
+) {
+  const nextUrl = `${window.location.pathname}${serializeSearchUrl(state)}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl === currentUrl) {
+    return;
+  }
+  if (mode === "push") {
+    window.history.pushState(null, "", nextUrl);
+  } else {
+    window.history.replaceState(null, "", nextUrl);
+  }
+}
+
+function searchStateFromLocation(): SearchUrlState {
+  return parseSearchUrl(window.location.search) ?? DEFAULT_SEARCH_URL_STATE;
+}
+
+function encodeFilterOption(value: string | null): string {
+  return value === null ? ALL_FILTER_OPTION : `${FACET_FILTER_PREFIX}${value}`;
+}
+
+function decodeFilterOption(value: string): string | null {
+  return value === ALL_FILTER_OPTION
+    ? null
+    : value.slice(FACET_FILTER_PREFIX.length);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message.trim() : "";
+  return message || fallback;
+}
+
+async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
   if (!response.ok) {
     throw new Error(await response.text());
   }

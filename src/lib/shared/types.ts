@@ -1,3 +1,7 @@
+import type { z } from "zod";
+
+import type { promptStatusSchema, searchModeSchema } from "./schemas";
+
 export type PromptKind =
   | "codex-raw"
   | "canon"
@@ -7,17 +11,13 @@ export type PromptKind =
   | "manifest"
   | "imported";
 
-export type PromptStatus =
-  | "inbox"
-  | "reviewed"
-  | "curate"
-  | "promote"
-  | "archived"
-  | "redact";
+/** Enumerates lifecycle states accepted by prompt records and filters. */
+export type PromptStatus = z.infer<typeof promptStatusSchema>;
 
 export type AiMode = "local" | "api" | "codex";
 
-export type SearchMode = "lexical" | "hybrid";
+/** Enumerates the supported lexical and embedding-assisted search modes. */
+export type SearchMode = z.infer<typeof searchModeSchema>;
 
 export type PromptSummary = {
   id: string;

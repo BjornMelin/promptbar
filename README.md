@@ -15,6 +15,9 @@ iteration, and reviewable exports back to the source repository.
 - **Search and edit without cloud lock-in:** use local SQLite FTS, structured
   metadata, and a dense editor-first UI before bringing any model provider into
   the loop.
+- **Share search options:** run **Search** or **Refresh**, then select **Copy
+  link** to share the committed query and filters. Links include the query text,
+  but not selections or editor state, so review the query before sharing.
 - **Evaluate with guardrails:** run local fallback evals by default, then opt in
   to repo-scoped OpenAI features only when `PROMPTBAR_OPENAI_API_KEY` is set.
 - **Export with confidence:** keep generated artifacts under `.promptbar/` and
