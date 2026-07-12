@@ -353,7 +353,7 @@ export function PromptbarApp() {
       applySearchState(DEFAULT_SEARCH_URL_STATE);
       setView("dashboard");
       setResults([]);
-      return loadCorpusResults(seed);
+      return loadCorpusResults(seed, true);
     },
     [applySearchState, loadCorpusResults, setView],
   );
@@ -424,10 +424,26 @@ export function PromptbarApp() {
 
   const refreshCurrentResults = useCallback(() => {
     const committedSearch = parseSearchUrl(window.location.search);
-    return committedSearch
+    return viewRef.current !== "dashboard" && committedSearch
       ? runSearch(committedSearch, "none", true)
       : loadCorpusResults(undefined, true);
   }, [loadCorpusResults, runSearch]);
+
+  const navigateView = useCallback(
+    (nextView: View) => {
+      if (nextView !== "dashboard" || !parseSearchUrl(window.location.search)) {
+        setView(nextView);
+        return;
+      }
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.hash}`,
+      );
+      void restoreDashboard();
+    },
+    [restoreDashboard, setView],
+  );
 
   const copySearchLink = useCallback(async () => {
     writeSearchHistory(searchStateFromLocation(), "replace");
@@ -551,11 +567,16 @@ export function PromptbarApp() {
       return;
     }
     setBusy(true);
-    const data = await postJson<{ filePath: string }>("/api/export", {
-      promptIds: selectedIds,
-    });
-    setNotice(`Exported ${selectedIds.length} prompts to ${data.filePath}`);
-    setBusy(false);
+    try {
+      const data = await postJson<{ filePath: string }>("/api/export", {
+        promptIds: selectedIds,
+      });
+      setNotice(`Exported ${selectedIds.length} prompts to ${data.filePath}`);
+    } catch (error) {
+      toast.error(errorMessage(error, "Unable to export prompts."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runCodex() {
@@ -615,7 +636,7 @@ export function PromptbarApp() {
                   size="icon"
                   variant="ghost"
                   aria-label={item.label}
-                  onClick={() => setView(item.id)}
+                  onClick={() => navigateView(item.id)}
                   className={cn(
                     "size-10 text-[#aaa69a] hover:bg-white/8 hover:text-white",
                     view === item.id &&
@@ -709,7 +730,7 @@ export function PromptbarApp() {
           <div className="min-h-0 overflow-hidden">
             <Tabs
               value={view}
-              onValueChange={(value) => setView(value as View)}
+              onValueChange={(value) => navigateView(value as View)}
               className="h-full"
             >
               <TabsList className="sr-only">
@@ -804,7 +825,7 @@ export function PromptbarApp() {
       <CommandDialog
         open={commandOpen}
         onOpen={setCommandOpen}
-        onView={setView}
+        onView={navigateView}
         onRefresh={refreshCurrentResults}
         onExport={exportSelected}
       />

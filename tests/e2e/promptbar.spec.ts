@@ -187,6 +187,200 @@ test("announces refresh failures in the view active when they settle", async ({
   expect(page.url()).toBe(initialUrl);
 });
 
+test("returns to corpus refresh when Dashboard leaves a committed search", async ({
+  page,
+}) => {
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto("/?view=search&q=termination");
+  await initialSearch;
+
+  const navigation = page.getByRole("complementary");
+  const initialCorpusLoad = page.waitForResponse((response) => {
+    return response.ok() && new URL(response.url()).pathname === "/api/corpus";
+  });
+  await navigation.getByRole("button", { name: "Dashboard" }).click();
+  await initialCorpusLoad;
+  await expect.poll(() => new URL(page.url()).search).toBe("");
+  await expect(
+    page.getByRole("textbox", { name: "Search corpus" }),
+  ).toHaveValue("");
+  await expect(
+    page.getByText("Plan a database change", { exact: true }),
+  ).toBeVisible();
+
+  const searchRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/search") {
+      searchRequests.push(request.url());
+    }
+  });
+  await page.getByRole("button", { name: "Command" }).click();
+  const corpusResponse = page.waitForResponse((response) => {
+    return response.ok() && new URL(response.url()).pathname === "/api/corpus";
+  });
+  await page
+    .getByRole("dialog")
+    .getByText("Refresh index", { exact: true })
+    .click();
+  await corpusResponse;
+
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByText(/^6 prompts ·/i)).toBeVisible();
+  expect(new URL(page.url()).search).toBe("");
+  expect(searchRequests).toEqual([]);
+});
+
+test("announces a delayed Dashboard history restore failure in the active transient view", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText(/^6 prompts ·/i)).toBeVisible();
+
+  const search = page.getByRole("textbox", { name: "Search corpus" });
+  await search.fill("termination");
+  const initialSearch = waitForSearch(page, "termination");
+  await search.press("Enter");
+  await initialSearch;
+  await expect
+    .poll(() => new URL(page.url()).search)
+    .toBe("?view=search&q=termination");
+
+  const navigation = page.getByRole("complementary");
+  let markRequestStarted!: () => void;
+  const requestStarted = new Promise<void>((resolve) => {
+    markRequestStarted = resolve;
+  });
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/corpus", async (route) => {
+    markRequestStarted();
+    await responseGate;
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "",
+    });
+  });
+
+  await page.goBack();
+  await requestStarted;
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  releaseResponse();
+
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+  const restoreError = page.getByText("Unable to open corpus.", {
+    exact: true,
+  });
+  await expect(restoreError).toHaveCount(1);
+  await expect(restoreError).toBeVisible();
+  expect(new URL(page.url()).search).toBe("");
+});
+
+test("keeps committed search URLs for transient views and restores Search on reload", async ({
+  page,
+}) => {
+  const committedSearch = "?view=search&q=termination";
+  const initialSearch = waitForSearch(page, "termination");
+  await page.goto(`/${committedSearch}`);
+  await initialSearch;
+
+  const navigation = page.getByRole("complementary");
+  await navigation.getByRole("button", { name: "Editor" }).click();
+  await expect(page.getByRole("button", { name: "Reveal raw" })).toBeVisible();
+  expect(new URL(page.url()).search).toBe(committedSearch);
+
+  await navigation.getByRole("button", { name: "AI" }).click();
+  await expect(
+    page.getByPlaceholder("Ask about selected prompts"),
+  ).toBeVisible();
+  expect(new URL(page.url()).search).toBe(committedSearch);
+
+  await navigation.getByRole("button", { name: "Evals" }).click();
+  await expect(page.getByRole("button", { name: /Run/i })).toBeVisible();
+  expect(new URL(page.url()).search).toBe(committedSearch);
+
+  const restoredSearch = waitForSearch(page, "termination");
+  await page.reload();
+  await restoredSearch;
+  await expect(
+    page.getByRole("textbox", { name: "Search corpus" }),
+  ).toHaveValue("termination");
+  await expect(
+    page.getByRole("heading", { name: "Design an agent workflow" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).search).toBe(committedSearch);
+});
+
+test("reports command and Editor export failures without leaking rejections", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText(/^6 prompts ·/i)).toBeVisible();
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+  let exportAttempts = 0;
+  await page.route("**/api/export", async (route) => {
+    exportAttempts += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body:
+        exportAttempts === 1
+          ? "Command export unavailable."
+          : "Editor export unavailable.",
+    });
+  });
+
+  await page.getByRole("button", { name: "Command" }).click();
+  const failedExport = page.waitForResponse((response) => {
+    return (
+      response.status() === 500 &&
+      new URL(response.url()).pathname === "/api/export"
+    );
+  });
+  await page
+    .getByRole("dialog")
+    .getByText("Export context", { exact: true })
+    .click();
+  await failedExport;
+
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  const commandError = page.getByText("Command export unavailable.", {
+    exact: true,
+  });
+  await expect(commandError).toHaveCount(1);
+  await expect(commandError).toBeVisible();
+
+  await page
+    .getByRole("complementary")
+    .getByRole("button", { name: "Editor" })
+    .click();
+  const failedEditorExport = page.waitForResponse((response) => {
+    return (
+      response.status() === 500 &&
+      new URL(response.url()).pathname === "/api/export"
+    );
+  });
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await failedEditorExport;
+
+  const editorError = page.getByText("Editor export unavailable.", {
+    exact: true,
+  });
+  await expect(editorError).toHaveCount(1);
+  await expect(editorError).toBeVisible();
+  expect(exportAttempts).toBe(2);
+  expect(pageErrors).toEqual([]);
+
+  await page
+    .getByRole("complementary")
+    .getByRole("button", { name: "Evals" })
+    .click();
+  await expect(page.getByRole("button", { name: /Run/i })).toBeEnabled();
+});
+
 test("hydrates shareable filters and restores committed search history", async ({
   page,
 }) => {
