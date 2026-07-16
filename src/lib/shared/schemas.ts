@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/** Validates canonical prompt document kinds. */
+export const promptKindSchema = z.enum([
+  "codex-raw",
+  "canon",
+  "reference",
+  "project",
+  "archive",
+  "manifest",
+  "imported",
+]);
+
 export const promptStatusSchema = z.enum([
   "inbox",
   "reviewed",

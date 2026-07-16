@@ -14,7 +14,6 @@ import type {
   PromptStatus,
   PromptSummary,
   PromptVersion,
-  SearchMode,
 } from "@/lib/shared/types";
 
 type Row = Record<string, unknown>;
@@ -137,56 +136,6 @@ function jsonFacet(column: string) {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 100)
     .map(([value, count]) => ({ value, count }));
-}
-
-/**
- * Searches prompt documents with local SQLite FTS and metadata filters.
- *
- * @param input - Search query, filters, mode, and result limit.
- * @returns Matching prompt summaries ordered by relevance or update time.
- */
-export function searchDocuments(input: {
-  query: string;
-  mode: SearchMode;
-  kind?: string;
-  status?: string;
-  tag?: string;
-  limit: number;
-}): PromptSummary[] {
-  const args: unknown[] = [];
-  const where: string[] = [];
-  if (input.kind) {
-    where.push("d.kind = ?");
-    args.push(input.kind);
-  }
-  if (input.status) {
-    where.push("d.status = ?");
-    args.push(input.status);
-  }
-  if (input.tag) {
-    where.push(jsonArrayContains("d.tags_json"));
-    args.push(input.tag);
-  }
-
-  const query = input.query.trim();
-  let sql = "SELECT d.*, 0.0 AS score FROM documents d";
-  if (query) {
-    sql = `
-      SELECT d.*, bm25(documents_fts) * -1.0 AS score
-      FROM documents_fts
-      JOIN documents d ON d.id = documents_fts.id
-    `;
-    where.push("documents_fts MATCH ?");
-    args.push(ftsQuery(query));
-  }
-
-  const whereSql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
-  const order = query ? "score DESC, d.updated_at DESC" : "d.updated_at DESC";
-  return (
-    db()
-      .prepare(`${sql}${whereSql} ORDER BY ${order} LIMIT ?`)
-      .all(...args, input.limit) as Row[]
-  ).map(summaryFromRow);
 }
 
 /**
@@ -434,13 +383,4 @@ function parseObject(value: unknown): Record<string, unknown> {
 function resetDb(): void {
   singleton?.close();
   singleton = null;
-}
-
-function ftsQuery(value: string): string {
-  const terms = value
-    .split(/\s+/)
-    .map((term) => term.replace(/["*]/g, "").trim())
-    .filter((term) => term.length > 1)
-    .slice(0, 12);
-  return terms.map((term) => `"${term}"*`).join(" OR ") || '""';
 }

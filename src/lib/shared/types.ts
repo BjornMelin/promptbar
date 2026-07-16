@@ -1,20 +1,15 @@
 import type { z } from "zod";
 
 import type {
+  promptKindSchema,
   promptStatusSchema,
   refinementRequestSchema,
   refinementResponseSchema,
   searchModeSchema,
 } from "./schemas";
 
-export type PromptKind =
-  | "codex-raw"
-  | "canon"
-  | "reference"
-  | "project"
-  | "archive"
-  | "manifest"
-  | "imported";
+/** Enumerates canonical prompt document kinds. */
+export type PromptKind = z.infer<typeof promptKindSchema>;
 
 /** Enumerates lifecycle states accepted by prompt records and filters. */
 export type PromptStatus = z.infer<typeof promptStatusSchema>;
@@ -30,6 +25,7 @@ export type RefinementRequest = z.infer<typeof refinementRequestSchema>;
 /** Generated prompt markdown with citations resolved to Promptbar records. */
 export type RefinementResponse = z.infer<typeof refinementResponseSchema>;
 
+/** Summarizes a prompt record for search and collection views. */
 export type PromptSummary = {
   id: string;
   title: string;
@@ -44,7 +40,7 @@ export type PromptSummary = {
   contentHash: string;
   updatedAt: string;
   score?: number;
-  semanticScore?: number;
+  semanticScore?: number | null;
 };
 
 /**

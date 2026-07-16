@@ -451,18 +451,24 @@ fn policy_explain() -> serde_json::Value {
 }
 
 fn search_embed_config() -> Option<EmbedConfig> {
-    let base_url = std::env::var("PROMPTOPS_EMBED_BASE_URL").ok();
-    let api_key = std::env::var("PROMPTOPS_EMBED_API_KEY").ok();
+    let base_url = non_empty_env("PROMPTOPS_EMBED_BASE_URL");
+    let api_key = non_empty_env("PROMPTOPS_EMBED_API_KEY");
     if base_url.is_none() && api_key.is_none() {
         return None;
     }
     Some(EmbedConfig {
         base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
         api_key,
-        model: std::env::var("PROMPTOPS_EMBED_MODEL")
-            .unwrap_or_else(|_| "text-embedding-3-small".to_string()),
-        dimensions: std::env::var("PROMPTOPS_EMBED_DIMENSIONS")
-            .ok()
+        model: non_empty_env("PROMPTOPS_EMBED_MODEL")
+            .unwrap_or_else(|| "text-embedding-3-small".to_string()),
+        dimensions: non_empty_env("PROMPTOPS_EMBED_DIMENSIONS")
             .and_then(|value| value.parse().ok()),
     })
+}
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
