@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 
 import { apiEnabled, codexAvailable } from "../../../lib/server/env";
 import { runPromptopsJson } from "../../../lib/server/promptops";
-import { searchRequestSchema } from "../../../lib/shared/schemas";
-import type {
-  PromptKind,
-  PromptStatus,
-  SearchMode,
-  SearchResponse,
-} from "../../../lib/shared/types";
+import {
+  promptKindSchema,
+  promptStatusSchema,
+  searchRequestSchema,
+} from "../../../lib/shared/schemas";
+import type { SearchMode, SearchResponse } from "../../../lib/shared/types";
 
 export const runtime = "nodejs";
 
@@ -67,6 +66,12 @@ export async function GET(request: Request) {
   return NextResponse.json(adaptSearchResponse(envelope.data));
 }
 
+/**
+ * Adapts the promptops response to the public search contract.
+ *
+ * @param data - Search data returned by the promptops CLI.
+ * @returns The validated camel-case API response.
+ */
 function adaptSearchResponse(data: PromptopsSearchResponse): SearchResponse {
   return {
     mode: data.mode,
@@ -74,8 +79,8 @@ function adaptSearchResponse(data: PromptopsSearchResponse): SearchResponse {
     results: data.results.map((item) => ({
       id: item.id,
       title: item.title,
-      kind: item.kind as PromptKind,
-      status: item.status as PromptStatus,
+      kind: promptKindSchema.parse(item.kind),
+      status: promptStatusSchema.parse(item.status),
       favorite: item.favorite,
       tags: item.tags,
       riskFlags: item.risk_flags,

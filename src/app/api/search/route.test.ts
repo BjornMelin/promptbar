@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 
 const mocks = vi.hoisted(() => ({
   apiEnabled: vi.fn(),
@@ -169,4 +170,20 @@ describe("GET /api/search", () => {
         "Hybrid search needs an explicit OpenAI-compatible embedding profile.",
     });
   });
+
+  it.each(["kind", "status"] as const)(
+    "rejects an invalid %s returned by promptops",
+    async (field) => {
+      const data = promptopsSearchData();
+      data.results[0]![field] = `invalid-${field}`;
+      mocks.runPromptopsJson.mockResolvedValue({
+        schema: "promptops.output.v1",
+        data,
+      });
+
+      await expect(
+        GET(new Request("http://localhost/api/search?q=termination")),
+      ).rejects.toThrow(ZodError);
+    },
+  );
 });
