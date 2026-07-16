@@ -1213,6 +1213,125 @@ mod tests {
     }
 
     #[test]
+    fn search_contract_covers_filters_limit_empty_query_and_result_shape() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = StatePaths {
+            state_root: temp.path().join("state"),
+            config_root: temp.path().join("config"),
+            cache_root: temp.path().join("cache"),
+            db_path: temp.path().join("state/promptops.sqlite"),
+            raw_dir: temp.path().join("state/raw"),
+            audit_log: temp.path().join("state/audit.jsonl"),
+            config_file: temp.path().join("config/config.toml"),
+        };
+        let store = Store::open(paths).expect("store");
+        for (id, kind, status, tags) in [
+            ("match", "canon", "reviewed", vec!["agent", "workflow"]),
+            ("wrong-kind", "reference", "reviewed", vec!["agent"]),
+            ("wrong-status", "canon", "inbox", vec!["agent"]),
+            ("wrong-tag", "canon", "reviewed", vec!["other"]),
+        ] {
+            store
+                .upsert_document(DocumentInput {
+                    id: id.to_string(),
+                    title: format!("Termination {id}"),
+                    kind: kind.to_string(),
+                    status: status.to_string(),
+                    favorite: id == "match",
+                    tags: tags.into_iter().map(str::to_string).collect(),
+                    risk_flags: if id == "match" {
+                        vec!["network".to_string()]
+                    } else {
+                        Vec::new()
+                    },
+                    source_type: "test".to_string(),
+                    source_path: format!("/corpus/{id}.md"),
+                    source_record_id: None,
+                    corpus_root: Some("/corpus".to_string()),
+                    corpus_path: format!("canon/{id}.md"),
+                    content: format!("Design a termination-aware workflow for {id}."),
+                    frontmatter: json!({}),
+                    imported_at: "2026-07-15T00:00:00Z".to_string(),
+                })
+                .expect("document");
+        }
+
+        let response = store
+            .search(SearchRequest {
+                query: "termination".to_string(),
+                mode: SearchMode::Lexical,
+                kind: Some("canon".to_string()),
+                status: Some("reviewed".to_string()),
+                tag: Some("agent".to_string()),
+                risk: None,
+                limit: 7,
+            })
+            .expect("filtered search");
+
+        assert_eq!(response.mode, SearchMode::Lexical);
+        assert_eq!(response.query, "termination");
+        assert!(!response.hybrid_available);
+        assert_eq!(response.results.len(), 1);
+        let result = &response.results[0];
+        assert_eq!(result.id, "match");
+        assert_eq!(result.title, "Termination match");
+        assert_eq!(result.kind, "canon");
+        assert_eq!(result.status, "reviewed");
+        assert!(result.favorite);
+        assert_eq!(result.tags, ["agent", "workflow"]);
+        assert_eq!(result.risk_flags, ["network"]);
+        assert_eq!(result.source_path, "/corpus/match.md");
+        assert_eq!(result.corpus_path, "canon/match.md");
+        assert_eq!(result.content_hash.len(), 64);
+        assert!(result.excerpt.contains("termination-aware"));
+        assert!(result.score.is_finite());
+        assert_eq!(result.semantic_score, None);
+        assert_eq!(response.stats.documents, 4);
+        assert_eq!(response.facets.kinds[0].value, "canon");
+        assert_eq!(response.facets.kinds[0].count, 3);
+
+        let limited = store
+            .search_lexical(&SearchRequest {
+                query: "termination".to_string(),
+                mode: SearchMode::Lexical,
+                kind: None,
+                status: None,
+                tag: None,
+                risk: None,
+                limit: 2,
+            })
+            .expect("limited search");
+        assert_eq!(limited.len(), 2);
+
+        let sanitized_multi_term = store
+            .search_lexical(&SearchRequest {
+                query: "\"termin\"* absent".to_string(),
+                mode: SearchMode::Lexical,
+                kind: None,
+                status: None,
+                tag: None,
+                risk: None,
+                limit: 10,
+            })
+            .expect("sanitized multi-term search");
+        assert_eq!(sanitized_multi_term.len(), 4);
+
+        let empty_query = store
+            .search_lexical(&SearchRequest {
+                query: String::new(),
+                mode: SearchMode::Lexical,
+                kind: Some("canon".to_string()),
+                status: Some("reviewed".to_string()),
+                tag: Some("agent".to_string()),
+                risk: None,
+                limit: 1,
+            })
+            .expect("empty filtered search");
+        assert_eq!(empty_query.len(), 1);
+        assert_eq!(empty_query[0].id, "match");
+    }
+
+    #[test]
     fn import_search_patch_and_export_redacted() {
         let temp = tempfile::tempdir().expect("tempdir");
         let corpus = temp.path().join("corpus");

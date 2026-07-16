@@ -36,6 +36,48 @@ test("loads workbench and navigates primary surfaces", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Run/i })).toBeVisible();
 });
 
+test("falls back to lexical results without a hybrid provider profile", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const mode = page.getByRole("combobox", { name: "Search mode" });
+  await mode.click();
+  await page.getByRole("option", { name: "Hybrid" }).click();
+
+  const search = page.getByRole("textbox", { name: "Search corpus" });
+  await search.fill("termination");
+  const responsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.ok() &&
+      url.pathname === "/api/search" &&
+      url.searchParams.get("q") === "termination" &&
+      url.searchParams.get("mode") === "hybrid"
+    );
+  });
+  await search.press("Enter");
+  const response = await responsePromise;
+  const payload = (await response.json()) as {
+    mode: string;
+    hybridAvailable: boolean;
+    hybridReason: string;
+  };
+
+  expect(payload).toMatchObject({
+    mode: "hybrid",
+    hybridAvailable: false,
+    hybridReason:
+      "Hybrid search needs an explicit OpenAI-compatible embedding profile.",
+  });
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(
+    page.getByText(
+      "Hybrid search needs an explicit OpenAI-compatible embedding profile.",
+      { exact: true },
+    ),
+  ).toHaveAttribute("role", "status");
+});
+
 test("keeps workbench inputs mobile-safe with visible focus", async ({
   page,
 }) => {

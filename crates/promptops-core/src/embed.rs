@@ -202,3 +202,73 @@ fn cosine(left: &[f32], right: &[f32]) -> f32 {
         dot / (left_norm.sqrt() * right_norm.sqrt())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::DocumentInput;
+    use crate::models::SearchMode;
+    use crate::paths::StatePaths;
+
+    #[tokio::test]
+    async fn no_profile_hybrid_search_preserves_lexical_response() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::open(StatePaths {
+            state_root: temp.path().join("state"),
+            config_root: temp.path().join("config"),
+            cache_root: temp.path().join("cache"),
+            db_path: temp.path().join("state/promptops.sqlite"),
+            raw_dir: temp.path().join("state/raw"),
+            audit_log: temp.path().join("state/audit.jsonl"),
+            config_file: temp.path().join("config/config.toml"),
+        })
+        .expect("store");
+        store
+            .upsert_document(DocumentInput {
+                id: "prompt-1".to_string(),
+                title: "Termination workflow".to_string(),
+                kind: "canon".to_string(),
+                status: "reviewed".to_string(),
+                favorite: false,
+                tags: vec!["agent".to_string()],
+                risk_flags: Vec::new(),
+                source_type: "test".to_string(),
+                source_path: "/corpus/prompt-1.md".to_string(),
+                source_record_id: None,
+                corpus_root: Some("/corpus".to_string()),
+                corpus_path: "canon/prompt-1.md".to_string(),
+                content: "Design a termination-aware agent workflow.".to_string(),
+                frontmatter: json!({}),
+                imported_at: "2026-07-15T00:00:00Z".to_string(),
+            })
+            .expect("document");
+
+        let response = hybrid_search(
+            &store,
+            SearchRequest {
+                query: "termination".to_string(),
+                mode: SearchMode::Hybrid,
+                kind: Some("canon".to_string()),
+                status: Some("reviewed".to_string()),
+                tag: Some("agent".to_string()),
+                risk: None,
+                limit: 1,
+            },
+            None,
+        )
+        .await
+        .expect("hybrid fallback");
+
+        assert_eq!(response.mode, SearchMode::Hybrid);
+        assert_eq!(response.query, "termination");
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].id, "prompt-1");
+        assert_eq!(response.facets.kinds[0].value, "canon");
+        assert_eq!(response.stats.documents, 1);
+        assert!(!response.hybrid_available);
+        assert_eq!(
+            response.hybrid_reason,
+            "Hybrid search needs an explicit OpenAI-compatible embedding profile."
+        );
+    }
+}

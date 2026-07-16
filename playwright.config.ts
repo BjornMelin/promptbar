@@ -47,7 +47,11 @@ export default defineConfig({
       PROMPTOPS_STATE_DIR: path.join(runtimeRoot, "promptops", "state"),
       PROMPTOPS_CONFIG_DIR: path.join(runtimeRoot, "promptops", "config"),
       PROMPTOPS_CACHE_DIR: path.join(runtimeRoot, "promptops", "cache"),
+      PROMPTOPS_EMBED_BASE_URL: "",
       PROMPTOPS_EMBED_API_KEY: "",
+      PROMPTOPS_EMBED_DIMENSIONS: "",
+      PROMPTOPS_EMBED_MODEL: "",
+      PROMPTOPS_USE_CARGO: "1",
     },
   },
   projects: [

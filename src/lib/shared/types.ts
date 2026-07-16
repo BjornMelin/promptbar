@@ -44,7 +44,7 @@ export type PromptSummary = {
   contentHash: string;
   updatedAt: string;
   score?: number;
-  semanticScore?: number;
+  semanticScore?: number | null;
 };
 
 /**
